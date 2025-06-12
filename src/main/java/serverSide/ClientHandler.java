@@ -2,10 +2,11 @@ package serverSide;
 
 import java.io.*;
 import java.net.Socket;
+import java.time.LocalDate;
 import java.util.Scanner;
 
 public class ClientHandler {
-    Socket socket;
+    Socket moveSocket;
     InputStream inputStream;
     OutputStream outputStream;
     boolean isPlayer = false;
@@ -13,17 +14,30 @@ public class ClientHandler {
     PrintWriter printWriter;
     Scanner scanner;
     boolean assigned = false;
+    Socket heartbeatSocket;
+    boolean isAlive = true;
 
-    public ClientHandler(Socket socket) {
-        this.socket = socket;
+    public  boolean getIsAlive(){
+        return isAlive;
+    }
+    Scanner hearbeatScanner;
+
+    public ClientHandler(Socket socket, Socket heartbeatSocket) {
+        InputStream inputStream1;
+        this.heartbeatSocket = heartbeatSocket;
+        this.moveSocket = socket;
         try {
             outputStream = socket.getOutputStream();
             inputStream = socket.getInputStream();
+            inputStream1 = new BufferedInputStream(heartbeatSocket.getInputStream());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
         printWriter = new PrintWriter(outputStream, true);
         scanner = new Scanner(inputStream);
+
+        hearbeatScanner = new Scanner(inputStream1);
+        Thread.startVirtualThread(this::handleHeartbeat);
     }
 
     public void handleClient() {
@@ -36,6 +50,51 @@ public class ClientHandler {
         }
     }
 
+    private void handleHeartbeat() {
+
+        boolean clientOut = false;
+
+        long lastHeartbeat = System.currentTimeMillis();
+
+        while (true){
+            // check if waiting is too long here
+            while (!hearbeatScanner.hasNextLine()){
+                if(System.currentTimeMillis() - lastHeartbeat > 12_000){
+                    System.out.println("wait time is out, good bye client");
+                    clientOut = true;
+                    break;
+                }
+                try{
+                    Thread.sleep(1000);
+                }
+                catch (InterruptedException e){
+                    throw new IndexOutOfBoundsException();
+                }
+            }
+            if(clientOut){
+                break;
+            }
+            String heartbeat = hearbeatScanner.nextLine();
+            System.out.println(heartbeat);
+
+            lastHeartbeat = System.currentTimeMillis();
+
+        }
+        System.out.println("heartbeat very out");
+        isAlive = false;
+
+        handleClosingEverything();
+
+        if(isPlayer){
+            endGame();
+        }
+        else {
+            kickoutSpectator();
+        }
+
+    }
+
+
     public static void broadcastPlayer(ClientHandler client, Move move) {
         try {
             client.printWriter.println("update");
@@ -46,7 +105,7 @@ public class ClientHandler {
     }
 
     private void assignRole() {
-        while (!assigned && socket.isConnected()) {
+        while (!assigned && moveSocket.isConnected()) {
             try {
                 System.out.println("Current players: " + Server.players.size());
 
@@ -104,9 +163,11 @@ public class ClientHandler {
 
                     if (Server.players.size() == 1) {
                         isWhitePlayer = true;
+                        printWriter.println("white");
                         System.out.println("Assigned as White player");
                     } else {
                         isWhitePlayer = false;
+                        printWriter.println("black");
                         System.out.println("Assigned as Black player");
                     }
                 }
@@ -136,7 +197,7 @@ public class ClientHandler {
         }
     }
 
-    public Move handleMove(String color) {
+    public Move handleMessagePlayer(String color) {
         try {
             printWriter.println("enter your move");
 
@@ -157,7 +218,7 @@ public class ClientHandler {
         try {
             if (scanner != null) scanner.close();
             if (printWriter != null) printWriter.close();
-            if (socket != null && !socket.isClosed()) socket.close();
+            if (moveSocket != null && !moveSocket.isClosed()) moveSocket.close();
         } catch (IOException e) {
             System.out.println("Error during cleanup: " + e.getMessage());
         }

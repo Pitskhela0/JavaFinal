@@ -3,34 +3,98 @@ package clientSide;
 import java.io.*;
 import java.net.Socket;
 import java.util.Scanner;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Client {
     private static Scanner userInputScanner; // Single scanner for user input
     private static Scanner serverScanner;    // Single scanner for server input
     private static PrintWriter printWriter;
+    private static boolean isWhite;
+
+    private static AtomicBoolean isConnected = new AtomicBoolean(false);
+    private final static int HEARTBEAT = 5000;
+
+    static Socket gameSocket;
+    static Socket heartbeatSocket;
+    static String role;
 
     public static void main(String[] args) throws IOException {
-        Socket socket = new Socket("localhost", 10000);
+        gameSocket = new Socket("localhost", 10000);
+
+        try{
+            Scanner scanner = new Scanner(gameSocket.getInputStream());
+            String message = scanner.nextLine(); // should get heartbeat socket port
+            int heartbeatPort = Integer.parseInt(message.split(":")[1]);
+            heartbeatSocket = new Socket("localhost",heartbeatPort);
+            isConnected.set(true);
+        }
+        catch (Exception e){
+            System.out.println("error during connecting to server");
+            return;
+        }
+
+        // heartbeat handling method
+        handleHeartbeat();
 
         // Initialize streams once
-        OutputStream outputStream = socket.getOutputStream();
+        OutputStream outputStream = gameSocket.getOutputStream();
         printWriter = new PrintWriter(outputStream, true);
-        InputStream inputStream = socket.getInputStream();
+        InputStream inputStream = gameSocket.getInputStream();
         serverScanner = new Scanner(inputStream);
-        userInputScanner = new Scanner(System.in); // Single scanner for all user input
+        userInputScanner = new Scanner(System.in); // single scanner for all user input
 
-        String role = assignRole();
+        role = assignRole();
+        isConnected.set(true);
+
 
         if (role.equals("player")) {
+            String color = serverScanner.nextLine();
+            if(color.equals("white")){
+                isWhite = true;
+                System.out.println("I am white");
+            }
+            else {
+                isWhite = false;
+                System.out.println("I am black");
+            }
             clientPlayer();
         } else {
             clientSpectator();
         }
 
-        // Clean up resources
+        // clean up resources
         userInputScanner.close();
         serverScanner.close();
-        socket.close();
+        gameSocket.close();
+    }
+
+    private static void handleHeartbeat() throws IOException {
+        OutputStream heartbeatOut = heartbeatSocket.getOutputStream();
+        PrintWriter heartbeatPrinter = new PrintWriter(heartbeatOut, true);
+
+        System.out.println("connect to heartbeat");
+
+        // start the heartbeat
+        Thread.startVirtualThread(() -> heartbeatHandler(heartbeatPrinter));
+        System.out.println("heartbeat started");
+    }
+
+    private static void heartbeatHandler(PrintWriter heartbeatWriter) {
+        while (isConnected.get()){
+                heartbeatWriter.println("HEARTBEAT");
+            try {
+                Thread.sleep(HEARTBEAT);
+            } catch (InterruptedException e) {
+                System.out.println("Heartbeat thread stopping...");
+                isConnected.set(false);
+                break;
+            }
+            catch (Exception e){
+                System.out.println("Heartbeat error: " + e.getMessage());
+                isConnected.set(false);
+                break;
+            }
+        }
     }
 
     private static String assignRole() {
@@ -40,7 +104,7 @@ public class Client {
             String input = userInputScanner.nextLine().trim();
             printWriter.println(input);
 
-            // Read server responses
+            // read server responses
             String informativeMessage = serverScanner.nextLine();
             System.out.println(informativeMessage);
 
@@ -50,14 +114,14 @@ public class Client {
                 System.out.println(input + " connected - on client side");
                 return input;
             }
-            // If not ok, continue the loop to try again
+            // if not ok, continue the loop to try again
         }
     }
 
     private static void clientPlayer() {
         System.out.println("You are now a player. Waiting for game to start...");
 
-        while (true) {
+        while (isConnected.get()) {
             try {
                 String messageFromServer = serverScanner.nextLine();
 
@@ -76,6 +140,7 @@ public class Client {
                 }
             } catch (Exception e) {
                 System.out.println("Connection lost or error occurred: " + e.getMessage());
+                isConnected.set(false);
                 break;
             }
         }
@@ -85,7 +150,7 @@ public class Client {
         System.out.println("You are now a spectator. Watching the game...");
 
         try {
-            while (true) {
+            while (isConnected.get()) {
                 String messageFromServer = serverScanner.nextLine();
                 if(messageFromServer.equals("MID_GAME")){
                     System.out.println("MID_GAME update, board was sent");
@@ -96,6 +161,7 @@ public class Client {
             }
         } catch (Exception e) {
             System.out.println("Connection lost or error occurred: " + e.getMessage());
+            isConnected.set(false);
         }
     }
 }
