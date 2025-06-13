@@ -41,8 +41,7 @@ public class Server {
                 ClientHandler clientHandler = new ClientHandler(socket,heartbeatSocket);
 
                 // spectators and players list are updated in ClientHandler.java
-                new Thread(clientHandler::handleClient).start();
-
+                Thread.startVirtualThread(clientHandler::handleClient);
             }
             catch (IOException e){
                 throw new RuntimeException(e);
@@ -54,48 +53,55 @@ public class Server {
         gameStarted = true;
 
         // start the game
-        while (true){
+        while (!gameFinished){
             // initialize game
-
-            // white player
-            // send request to white to enter the move
-
-            // server should invoke sending and receiving to the server
 
             if(!players.get(0).getIsAlive()){
                 System.out.println("White player is out");
                 break;
             }
+
             Move whiteMove = players.get(0).handleMessagePlayer("white");
 
-            // send update to spectators and black player (second in the list is always black)
+            ClientHandler.broadcastPlayer(players.get(1), whiteMove); // send update to black player
+
             broadcast(whiteMove);
+
 
             if(!players.get(1).getIsAlive()){
                 System.out.println("black player is out");
                 break;
             }
-            // update black player board with white move
-            ClientHandler.broadcastPlayer(players.get(1), whiteMove);
 
             // black player
             Move blackMove = players.get(1).handleMessagePlayer("black");
-            // send updates to spectators and white player (first in the list is always white)
+
             broadcast(blackMove);
-            // update white player board with black move
-            ClientHandler.broadcastPlayer(players.get(0), blackMove);
+
+            ClientHandler.broadcastPlayer(players.get(0), blackMove); // send update to white player
 
         }
     }
+
+    public static void endGame(){
+        gameFinished = true;
+        // send to every client closing acknowledgement
+        players.forEach(ClientHandler::close);
+        spectators.forEach(ClientHandler::close);
+    }
+
+    public static void kickoutSpectator(){
+
+    }
+
 
     // broadcasts
     public static void broadcast(Move move){
         Thread.startVirtualThread(() -> {
 
-            spectators = spectators.stream().filter((client -> client.moveSocket != null)).collect(Collectors.toList());
+            spectators = spectators.stream().filter((client -> client.getMoveSocket() != null)).collect(Collectors.toList());
 
             spectators.forEach((client) -> client.sendUpdate(move));
-
         });
     }
 }

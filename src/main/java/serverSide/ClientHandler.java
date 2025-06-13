@@ -6,21 +6,26 @@ import java.time.LocalDate;
 import java.util.Scanner;
 
 public class ClientHandler {
-    Socket moveSocket;
-    InputStream inputStream;
-    OutputStream outputStream;
-    boolean isPlayer = false;
-    boolean isWhitePlayer = false;
-    PrintWriter printWriter;
-    Scanner scanner;
-    boolean assigned = false;
-    Socket heartbeatSocket;
-    boolean isAlive = true;
+    private Socket moveSocket;
+
+    public Socket getMoveSocket() {
+        return moveSocket;
+    }
+
+    private InputStream inputStream;
+    private OutputStream outputStream;
+    private boolean isPlayer = false;
+    private boolean isWhitePlayer = false;
+    private PrintWriter printWriter;
+    private Scanner scanner;
+    private boolean assigned = false;
+    private Socket heartbeatSocket;
+    private boolean isAlive = true;
 
     public  boolean getIsAlive(){
         return isAlive;
     }
-    Scanner hearbeatScanner;
+    private Scanner hearbeatScanner;
 
     public ClientHandler(Socket socket, Socket heartbeatSocket) {
         InputStream inputStream1;
@@ -83,16 +88,17 @@ public class ClientHandler {
         System.out.println("heartbeat very out");
         isAlive = false;
 
-        handleClosingEverything();
-
         if(isPlayer){
-            endGame();
+            Server.endGame();
+
         }
         else {
-            kickoutSpectator();
+            Server.kickoutSpectator();
         }
 
+//        handleClosingEverything();
     }
+
 
 
     public static void broadcastPlayer(ClientHandler client, Move move) {
@@ -226,5 +232,17 @@ public class ClientHandler {
 
     public void sendFullBoard(Board board) {
         printWriter.println("MID_GAME");
+    }
+
+    public void close() {
+        // send ack to client to close connection with game server via heartbeat socket
+        try {
+            OutputStream outputStream1 = new BufferedOutputStream(heartbeatSocket.getOutputStream());
+            PrintWriter writer = new PrintWriter(outputStream1);
+            writer.println("GAME_END");
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
     }
 }
