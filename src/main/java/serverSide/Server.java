@@ -7,27 +7,38 @@ import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
+import java.util.logging.Logger;
+import java.util.logging.Level;
 
 public class Server {
+    private static final Logger LOGGER = Logger.getLogger(Server.class.getName());
+    private static final int SERVER_PORT = 10000;
+    private static final int SHUTDOWN_DELAY_MS = 500;
+    private static final String COLOR_WHITE = "white";
+    private static final String COLOR_BLACK = "black";
+    private static final String HEARTBEAT_PORT_PREFIX = "HEARTBEAT_PORT:";
+
     private static List<ClientHandler> spectators = Collections.synchronizedList(new ArrayList<>());
-    private static List<ClientHandler> players = Collections.synchronizedList(new ArrayList<>());
+    private static final List<ClientHandler> players = Collections.synchronizedList(new ArrayList<>());
     private static Board board;
+
+    private static final AtomicBoolean gameFinished = new AtomicBoolean(false);
+    private static final AtomicBoolean gameStarted = new AtomicBoolean(false);
+    private static ServerSocket serverSocket;
 
     public static Board getBoard() {
         return board;
     }
 
-    private static boolean gameFinished = false;
-    private static boolean gameStarted = false;
-    private static ServerSocket serverSocket;
-
-    public static void setGameStarted(boolean gameStarted) {
-        Server.gameStarted = gameStarted;
+    public static void setGameStarted(boolean started) {
+        gameStarted.set(started);
+        LOGGER.info("Game started status changed to: " + started);
     }
 
     public static boolean isGameStarted() {
-        return gameStarted;
+        return gameStarted.get();
     }
 
     public static List<ClientHandler> getSpectators() {
@@ -39,50 +50,93 @@ public class Server {
     }
 
     public static void main(String[] args) {
-        serverSocket = null;
-        try {if(!gameFinished)
-                serverSocket = new ServerSocket(10000);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        LOGGER.info("Starting server on port " + SERVER_PORT);
+
+        try {
+            initializeServer();
+            runServer();
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Fatal server error", e);
+        } finally {
+            cleanup();
         }
+    }
 
-        while (!gameFinished) {
-            try {
-                Socket socket = serverSocket.accept();
-
-                ServerSocket heartbeatServerSocket = new ServerSocket(0);// 0 means that os will find avaliable random port
-
-                int heartbeatPort = heartbeatServerSocket.getLocalPort();// gives me port
-
-                PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
-                writer.println("HEARTBEAT_PORT:"+heartbeatPort);
-
-                Socket heartbeatSocket = heartbeatServerSocket.accept();
-                System.out.println(players.size());
-
-                ClientHandler clientHandler = new ClientHandler(socket,heartbeatSocket);
-
-                // spectators and players list are updated in ClientHandler.java
-                Thread.startVirtualThread(clientHandler::handleClient);
+    private static void initializeServer() throws IOException {
+        try {
+            if (!gameFinished.get()) {
+                serverSocket = new ServerSocket(SERVER_PORT);
+                LOGGER.info("Server socket created successfully on port " + SERVER_PORT);
             }
-            catch (IOException e){
-                System.out.println("Server is closing");
-                try {
-                    serverSocket.close();
-                } catch (IOException ex) {
-                    throw new RuntimeException(ex);
-                }
+        } catch (IOException e) {
+            LOGGER.log(Level.SEVERE, "Failed to create server socket", e);
+            throw new RuntimeException("Failed to initialize server", e);
+        }
+    }
 
+    private static void runServer() {
+        while (!gameFinished.get()) {
+            try {
+                LOGGER.info("Waiting for client connections...");
+                Socket socket = serverSocket.accept();
+                LOGGER.info("New client connected from: " + socket.getRemoteSocketAddress());
+
+                handleNewClient(socket);
+            } catch (IOException e) {
+                if (!gameFinished.get()) {
+                    LOGGER.log(Level.WARNING, "Error accepting client connection", e);
+                }
+                System.out.println("Server is closing");
                 break;
             }
         }
     }
 
+    private static void handleNewClient(Socket socket) {
+        try {
+            // Create heartbeat server socket
+            ServerSocket heartbeatServerSocket = new ServerSocket(0); // 0 means OS will find available random port
+            int heartbeatPort = heartbeatServerSocket.getLocalPort();
+
+            LOGGER.info("Created heartbeat socket on port: " + heartbeatPort);
+
+            // Send heartbeat port to client
+            PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
+            writer.println(HEARTBEAT_PORT_PREFIX + heartbeatPort);
+            writer.flush();
+
+            // Accept heartbeat connection
+            Socket heartbeatSocket = heartbeatServerSocket.accept();
+            LOGGER.info("Heartbeat connection established");
+            System.out.println("Current players: " + players.size());
+
+            // Create client handler
+            ClientHandler clientHandler = new ClientHandler(socket, heartbeatSocket);
+
+            // Start handling client in separate thread
+            Thread.startVirtualThread(clientHandler::handleClient);
+
+            // Close the heartbeat server socket as we only need one connection
+            heartbeatServerSocket.close();
+
+        } catch (IOException e) {
+            LOGGER.log(Level.SEVERE, "Error handling new client", e);
+            try {
+                if (!socket.isClosed()) {
+                    socket.close();
+                }
+            } catch (IOException closeEx) {
+                LOGGER.log(Level.WARNING, "Error closing client socket", closeEx);
+            }
+        }
+    }
+
     static void startGame() {
-        gameStarted = true;
+        LOGGER.info("Starting game with 2 players");
+        gameStarted.set(true);
 
         // start the game
-        while (!gameFinished){
+        while (!gameFinished.get()){
             // initialize game
 
             if(!players.get(0).getIsAlive() || !players.get(1).getIsAlive()){
@@ -90,7 +144,7 @@ public class Server {
                 break;
             }
 
-            Move whiteMove = players.get(0).handleMessagePlayer("white");
+            Move whiteMove = players.get(0).handleMessagePlayer(COLOR_WHITE);
 
             ClientHandler.broadcastPlayer(players.get(1), whiteMove); // send update to black player
 
@@ -103,7 +157,7 @@ public class Server {
             }
 
             // black player
-            Move blackMove = players.get(1).handleMessagePlayer("black");
+            Move blackMove = players.get(1).handleMessagePlayer(COLOR_BLACK);
 
             broadcast(blackMove);
 
@@ -112,43 +166,140 @@ public class Server {
         }
     }
 
-    public static void endGame() {
-        gameFinished = true;
+    private static boolean isPlayerAlive(int playerIndex) {
+        try {
+            return playerIndex < players.size() && players.get(playerIndex).getIsAlive();
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Error checking player alive status", e);
+            return false;
+        }
+    }
 
-        // Send to every client closing acknowledgement
-        System.out.println("Closing the game :: endGame()");
-        players.forEach(ClientHandler::close);
-        spectators.forEach(ClientHandler::close);
-
-        // Use a separate thread to close the server socket after a brief delay
-        // This ensures all client close messages are sent before shutting down
-        Thread.startVirtualThread(() -> {
-            try {
-                Thread.sleep(500); // Give time for messages to be sent
-                if (serverSocket != null && !serverSocket.isClosed()) {
-                    serverSocket.close();
-                    System.out.println("Server socket closed");
-                }
-            } catch (Exception e) {
-                System.out.println("Error during server shutdown: " + e.getMessage());
+    private static Move handlePlayerMove(int playerIndex, String color) {
+        try {
+            if (playerIndex >= players.size()) {
+                LOGGER.warning("Invalid player index: " + playerIndex);
+                return new Move("error");
             }
-        });
 
+            return players.get(playerIndex).handleMessagePlayer(color);
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Error handling player move for " + color, e);
+            return new Move("error");
+        }
+    }
 
+    private static boolean isGameEndingMove(Move move) {
+        if (move == null) {
+            return true;
+        }
+
+        String moveString = move.getMove();
+        return "resign".equals(moveString) || "error".equals(moveString);
+    }
+
+    private static void broadcastMove(Move move, int targetPlayerIndex) {
+        try {
+            // Send to target player
+            if (targetPlayerIndex < players.size()) {
+                ClientHandler.broadcastPlayer(players.get(targetPlayerIndex), move);
+            }
+
+            // Send to all spectators
+            broadcast(move);
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Error broadcasting move", e);
+        }
+    }
+
+    public static void endGame() {
+        if (gameFinished.getAndSet(true)) {
+            return; // Already ending/ended
+        }
+
+        LOGGER.info("Ending game");
+        System.out.println("Closing the game :: endGame()");
+
+        try {
+            // Send close message to all clients
+            List<ClientHandler> allClients = new ArrayList<>();
+            allClients.addAll(players);
+            allClients.addAll(spectators);
+
+            allClients.forEach(client -> {
+                try {
+                    client.close();
+                } catch (Exception e) {
+                    LOGGER.log(Level.WARNING, "Error closing client", e);
+                }
+            });
+
+            // Use a separate thread to close the server socket after a brief delay
+            Thread.startVirtualThread(() -> {
+                try {
+                    Thread.sleep(SHUTDOWN_DELAY_MS);
+                    closeServerSocket();
+                } catch (Exception e) {
+                    LOGGER.log(Level.WARNING, "Error during server shutdown", e);
+                }
+            });
+
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error during game end process", e);
+        }
+    }
+
+    private static void closeServerSocket() {
+        try {
+            if (serverSocket != null && !serverSocket.isClosed()) {
+                serverSocket.close();
+                LOGGER.info("Server socket closed");
+                System.out.println("Server socket closed");
+            }
+        } catch (IOException e) {
+            LOGGER.log(Level.WARNING, "Error closing server socket", e);
+        }
     }
 
     public static void kickoutSpectator(){
-        spectators = spectators.stream().filter((element) -> !element.getIsAlive()).collect(Collectors.toList());;
+        spectators = spectators.stream().filter((element) -> element.getIsAlive()).collect(Collectors.toList());
     }
 
+    // Broadcasts moves to spectators
+    public static void broadcast(Move move) {
+        if (move == null) {
+            LOGGER.warning("Cannot broadcast null move");
+            return;
+        }
 
-    // broadcasts
-    public static void broadcast(Move move){
         Thread.startVirtualThread(() -> {
+            try {
+                spectators = spectators.stream().filter((client -> client.getMoveSocket() != null)).collect(Collectors.toList());
 
-            spectators = spectators.stream().filter((client -> client.getMoveSocket() != null)).collect(Collectors.toList());
+                spectators.forEach((client) -> client.sendUpdate(move));
 
-            spectators.forEach((client) -> client.sendUpdate(move));
+                LOGGER.fine("Broadcasted move to " + spectators.size() + " spectators");
+            } catch (Exception e) {
+                LOGGER.log(Level.WARNING, "Error during broadcast", e);
+            }
         });
+    }
+
+    private static void cleanup() {
+        LOGGER.info("Server cleanup started");
+
+        try {
+            // Clear client lists
+            players.clear();
+            spectators.clear();
+
+            // Close server socket if not already closed
+            closeServerSocket();
+
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Error during server cleanup", e);
+        }
+
+        LOGGER.info("Server cleanup completed");
     }
 }
