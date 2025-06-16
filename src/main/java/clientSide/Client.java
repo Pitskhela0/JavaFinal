@@ -1,7 +1,7 @@
 package clientSide;
 
-import clientSide.client.PlayerClient;
-import clientSide.client.SpectatorClient;
+import clientSide.clients.PlayerClient;
+import clientSide.clients.SpectatorClient;
 import clientSide.utils.ServerConnector;
 
 import java.io.*;
@@ -17,7 +17,13 @@ public class Client {
     private static String role;
 
     public static void main(String[] args) throws IOException {
-        gameSocket = new Socket("localhost", 10000);
+        try{
+            gameSocket = new Socket("localhost", 10000);
+        }
+        catch (Exception e){
+            System.out.println("cannot connect to server");
+            return;
+        }
 
         serverConnector = new ServerConnector(gameSocket);
 
@@ -36,6 +42,7 @@ public class Client {
         // assigning the role
         role = assignRole();
 
+
         if (role.equals("player")) {
             String color = serverScanner.nextLine();
             if(color.equals("white")){
@@ -48,9 +55,12 @@ public class Client {
                 PlayerClient whitePlayer = new PlayerClient(false, serverConnector, serverScanner, printWriter, userInputScanner);
                 whitePlayer.runPlayer();
             }
-        } else {
+        } else if(role.equals("spectator")){
             SpectatorClient spectator = new SpectatorClient(serverConnector, serverScanner);
             spectator.clientSpectator();
+        }
+        else {
+            System.out.println("Server is already closed");
         }
 
         // clean up resources
@@ -67,8 +77,15 @@ public class Client {
             printWriter.println(input);
 
             // read server responses
-            String informativeMessage = serverScanner.nextLine();
-            System.out.println(informativeMessage);
+            String informativeMessage;
+            try{
+                informativeMessage = serverScanner.nextLine();
+                System.out.println(informativeMessage);
+            }
+            catch (Exception e){
+                System.out.println("you cannot connect to server, it is closed");
+                break;
+            }
 
             String acknowledgement = serverScanner.nextLine();
 
@@ -78,5 +95,6 @@ public class Client {
             }
             // if not ok, continue the loop to try again
         }
+        return "";
     }
 }

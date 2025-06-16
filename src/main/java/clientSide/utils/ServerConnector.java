@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class ServerConnector {
     private Socket heartbeatSocket;
     private AtomicBoolean isConnected = new AtomicBoolean(false);
-    private final int HEARTBEAT = 5000;
+    private final int HEARTBEAT = 500;
 
     public Socket getHeartbeatSocket() {
         return heartbeatSocket;
@@ -63,6 +63,12 @@ public class ServerConnector {
             }
         }
         isConnected.set(false);
+        heartbeatWriter.close();
+        try {
+            heartbeatSocket.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public void serverConnectionListener() {
@@ -74,9 +80,9 @@ public class ServerConnector {
                 System.out.println("started listening about connection");
                 while (true){
                     if(heartbeatScanner.hasNextLine()){
+                        System.out.println("Game ended-heartbeat");
                         if(heartbeatScanner.nextLine().equals("GAME_END")){
                             isConnected.set(false);
-
                             break;
                         }
                     }

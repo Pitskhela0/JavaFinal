@@ -1,4 +1,4 @@
-package clientSide.client;
+package clientSide.clients;
 
 import clientSide.utils.ServerConnector;
 
@@ -29,7 +29,16 @@ public class PlayerClient {
                 if (messageFromServer.equals("update")) {
                     // This is a board update from opponent's move
                     String moveUpdate = serverScanner.nextLine();
+                    if(moveUpdate.equals("resign")){
+                        System.out.println("Game ended");
+                        break;
+                    }
+                    if(moveUpdate.equals("error")){
+                        System.out.println("Game ended - error from client");
+                        break;
+                    }
                     System.out.println("Opponent's move: " + moveUpdate);
+
                 } else if (messageFromServer.equals("enter your move")) {
                     // Server is asking for our move
                     System.out.println("Your turn! " + messageFromServer);

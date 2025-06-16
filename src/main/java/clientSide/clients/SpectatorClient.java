@@ -1,11 +1,10 @@
-package clientSide.client;
+package clientSide.clients;
 
 import clientSide.utils.ServerConnector;
 
 import java.util.Scanner;
 
 public class SpectatorClient {
-
     private ServerConnector serverConnector;
     private Scanner serverScanner;
     public SpectatorClient(ServerConnector serverConnector, Scanner serverScanner){
@@ -23,6 +22,10 @@ public class SpectatorClient {
                     System.out.println("MID_GAME update, board was sent");
                 }
                 else {
+                    if(messageFromServer.equals("resign")){
+                        System.out.println("Game ended-resign");
+                        break;
+                    }
                     System.out.println("Game update: " + messageFromServer);
                 }
             }
@@ -33,6 +36,6 @@ public class SpectatorClient {
         }
     }
     private void closeAllResources(){
-        // close all given resources
+
     }
 }

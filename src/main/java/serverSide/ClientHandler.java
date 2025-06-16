@@ -56,7 +56,6 @@ public class ClientHandler {
     }
 
     private void handleHeartbeat() {
-
         boolean clientOut = false;
 
         long lastHeartbeat = System.currentTimeMillis();
@@ -64,13 +63,13 @@ public class ClientHandler {
         while (true){
             // check if waiting is too long here
             while (!hearbeatScanner.hasNextLine()){
-                if(System.currentTimeMillis() - lastHeartbeat > 12_000){
+                if(System.currentTimeMillis() - lastHeartbeat > 1000){
                     System.out.println("wait time is out, good bye client");
                     clientOut = true;
                     break;
                 }
                 try{
-                    Thread.sleep(1000);
+                    Thread.sleep(200);
                 }
                 catch (InterruptedException e){
                     throw new IndexOutOfBoundsException();
@@ -90,13 +89,10 @@ public class ClientHandler {
 
         if(isPlayer){
             Server.endGame();
-
         }
         else {
             Server.kickoutSpectator();
         }
-
-//        handleClosingEverything();
     }
 
 
@@ -113,7 +109,7 @@ public class ClientHandler {
     private void assignRole() {
         while (!assigned && moveSocket.isConnected()) {
             try {
-                System.out.println("Current players: " + Server.players.size());
+                System.out.println("Current players: " + Server.getPlayers().size());
 
                 if (!scanner.hasNextLine()) {
                     break; // Client disconnected
@@ -123,7 +119,7 @@ public class ClientHandler {
                 System.out.println("Role request: " + userInput);
 
                 if (userInput.equals("player")) {
-                    if (Server.players.size() >= 2) {
+                    if (Server.getPlayers().size() >= 2) {
                         // informative message
                         printWriter.println("There are already 2 players");
                         // acknowledgement
@@ -145,9 +141,9 @@ public class ClientHandler {
                     // acknowledgement
                     printWriter.println("ok");
 
-                    if(Server.gameStarted){
+                    if(Server.isGameStarted()){
                         // mid game spectator
-                        sendFullBoard(Server.board);
+                        sendFullBoard(Server.getBoard());
                     }
                 } else {
                     // informative message
@@ -163,11 +159,11 @@ public class ClientHandler {
 
         if (assigned) {
             if (isPlayer) {
-                synchronized (Server.players) {
-                    Server.players.add(this);
-                    System.out.println("Total players: " + Server.players.size());
+                synchronized (Server.getPlayers()) {
+                    Server.getPlayers().add(this);
+                    System.out.println("Total players: " + Server.getPlayers().size());
 
-                    if (Server.players.size() == 1) {
+                    if (Server.getPlayers().size() == 1) {
                         isWhitePlayer = true;
                         printWriter.println("white");
                         System.out.println("Assigned as White player");
@@ -179,14 +175,14 @@ public class ClientHandler {
                 }
 
                 // Check if game should start
-                if (!Server.gameStarted && Server.players.size() == 2) {
-                    Server.gameStarted = true;
+                if (!Server.isGameStarted() && Server.getPlayers().size() == 2) {
+                    Server.setGameStarted(true);
                     new Thread(Server::startGame).start();
                 }
             } else {
-                synchronized (Server.spectators) {
-                    Server.spectators.add(this);
-                    System.out.println("Total spectators: " + Server.spectators.size());
+                synchronized (Server.getSpectators()) {
+                    Server.getSpectators().add(this);
+                    System.out.println("Total spectators: " + Server.getSpectators().size());
                 }
             }
         } else {
@@ -208,7 +204,10 @@ public class ClientHandler {
             printWriter.println("enter your move");
 
             if (!scanner.hasNextLine()) {
-                return new Move("resign"); // Player disconnected
+                // Player disconnected - end the game immediately
+                System.out.println(color + " player disconnected");
+                Server.endGame();
+                return new Move("resign");
             }
 
             String input = scanner.nextLine().trim();
@@ -216,6 +215,7 @@ public class ClientHandler {
             return new Move(input);
         } catch (Exception e) {
             System.out.println("Error getting move from " + color + " player: " + e.getMessage());
+            Server.endGame(); // End game on any communication error
             return new Move("error");
         }
     }
@@ -235,14 +235,44 @@ public class ClientHandler {
     }
 
     public void close() {
-        // send ack to client to close connection with game server via heartbeat socket
         try {
-            OutputStream outputStream1 = new BufferedOutputStream(heartbeatSocket.getOutputStream());
-            PrintWriter writer = new PrintWriter(outputStream1);
-            writer.println("GAME_END");
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+            // Mark as not alive first
+            isAlive = false;
 
+            if(isPlayer){
+                if(isWhitePlayer){
+                    System.out.println("game end was sent to white player");
+                } else {
+                    System.out.println("game end was sent to black player");
+                }
+            } else {
+                System.out.println("game end was sent to spectator");
+            }
+
+            // Send GAME_END through heartbeat socket
+            OutputStream outputStream1 = heartbeatSocket.getOutputStream();
+            PrintWriter writer = new PrintWriter(outputStream1, true);
+            writer.println("GAME_END");
+            writer.flush();
+
+            // Send resign through main socket
+            printWriter.println("update");
+            printWriter.println("resign");
+            printWriter.flush();
+
+            // Close sockets after a brief delay to ensure messages are sent
+            Thread.sleep(100);
+
+            // Close resources
+            if (heartbeatSocket != null && !heartbeatSocket.isClosed()) {
+                heartbeatSocket.close();
+            }
+            if (moveSocket != null && !moveSocket.isClosed()) {
+                moveSocket.close();
+            }
+
+        } catch (Exception e) {
+            System.out.println("Error closing client handler: " + e.getMessage());
+        }
     }
 }

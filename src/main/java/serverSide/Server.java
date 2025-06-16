@@ -10,16 +10,38 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class Server {
-    static List<ClientHandler> spectators = Collections.synchronizedList(new ArrayList<>());
-    static List<ClientHandler> players = Collections.synchronizedList(new ArrayList<>());
-    static Board board;
-    static boolean gameFinished = false;
-    static boolean gameStarted = false;
+    private static List<ClientHandler> spectators = Collections.synchronizedList(new ArrayList<>());
+    private static List<ClientHandler> players = Collections.synchronizedList(new ArrayList<>());
+    private static Board board;
+
+    public static Board getBoard() {
+        return board;
+    }
+
+    private static boolean gameFinished = false;
+    private static boolean gameStarted = false;
+    private static ServerSocket serverSocket;
+
+    public static void setGameStarted(boolean gameStarted) {
+        Server.gameStarted = gameStarted;
+    }
+
+    public static boolean isGameStarted() {
+        return gameStarted;
+    }
+
+    public static List<ClientHandler> getSpectators() {
+        return spectators;
+    }
+
+    public static List<ClientHandler> getPlayers() {
+        return players;
+    }
 
     public static void main(String[] args) {
-        ServerSocket serverSocket = null;
-        try {
-            serverSocket = new ServerSocket(10000);
+        serverSocket = null;
+        try {if(!gameFinished)
+                serverSocket = new ServerSocket(10000);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -44,7 +66,14 @@ public class Server {
                 Thread.startVirtualThread(clientHandler::handleClient);
             }
             catch (IOException e){
-                throw new RuntimeException(e);
+                System.out.println("Server is closing");
+                try {
+                    serverSocket.close();
+                } catch (IOException ex) {
+                    throw new RuntimeException(ex);
+                }
+
+                break;
             }
         }
     }
@@ -56,7 +85,7 @@ public class Server {
         while (!gameFinished){
             // initialize game
 
-            if(!players.get(0).getIsAlive()){
+            if(!players.get(0).getIsAlive() || !players.get(1).getIsAlive()){
                 System.out.println("White player is out");
                 break;
             }
@@ -68,7 +97,7 @@ public class Server {
             broadcast(whiteMove);
 
 
-            if(!players.get(1).getIsAlive()){
+            if(!players.get(0).getIsAlive() || !players.get(1).getIsAlive()){
                 System.out.println("black player is out");
                 break;
             }
@@ -83,15 +112,33 @@ public class Server {
         }
     }
 
-    public static void endGame(){
+    public static void endGame() {
         gameFinished = true;
-        // send to every client closing acknowledgement
+
+        // Send to every client closing acknowledgement
+        System.out.println("Closing the game :: endGame()");
         players.forEach(ClientHandler::close);
         spectators.forEach(ClientHandler::close);
+
+        // Use a separate thread to close the server socket after a brief delay
+        // This ensures all client close messages are sent before shutting down
+        Thread.startVirtualThread(() -> {
+            try {
+                Thread.sleep(500); // Give time for messages to be sent
+                if (serverSocket != null && !serverSocket.isClosed()) {
+                    serverSocket.close();
+                    System.out.println("Server socket closed");
+                }
+            } catch (Exception e) {
+                System.out.println("Error during server shutdown: " + e.getMessage());
+            }
+        });
+
+
     }
 
     public static void kickoutSpectator(){
-
+        spectators = spectators.stream().filter((element) -> !element.getIsAlive()).collect(Collectors.toList());;
     }
 
 
@@ -105,33 +152,3 @@ public class Server {
         });
     }
 }
-
-
-// change game loop, server should send to player when it is his turn
-
-
-
-// todo update board after every move
-
-// thread with virtual thread
-
-// todo problems:
-
-// spectators unda sheedzlos gasvla da aseve playersac, optional unda iyos gasvla
-
-// klienti roca ukukavshirdeba:
-// playeri ukukavshirda: daasrule tamashi
-// spektatori ukukavshirda: aranairi cvlileba, mxolod spektatori gadis
-// resources should be closed
-
-
-
-
-// todo: after problems
-// integracia tamashtan
-
-// bazebshi shenaxva: advili
-// PGN_shi gadatana arcise advili
-
-// daregistrireba, eg servershi unda moxdes tamashis dawyebamde
-// BOT_tan tamashi, ar vici magram cool
