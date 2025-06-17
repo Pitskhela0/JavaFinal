@@ -1,5 +1,7 @@
 package serverSide;
 
+import chess.model.BoardState;
+
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
@@ -22,13 +24,13 @@ public class Server {
 
     private static List<ClientHandler> spectators = Collections.synchronizedList(new ArrayList<>());
     private static final List<ClientHandler> players = Collections.synchronizedList(new ArrayList<>());
-    private static Board board;
+    private static BoardState board;
 
     private static final AtomicBoolean gameFinished = new AtomicBoolean(false);
     private static final AtomicBoolean gameStarted = new AtomicBoolean(false);
     private static ServerSocket serverSocket;
 
-    public static Board getBoard() {
+    public static BoardState getBoard() {
         return board;
     }
 
@@ -146,6 +148,8 @@ public class Server {
 
             Move whiteMove = players.get(0).handleMessagePlayer(COLOR_WHITE);
 
+            recordMove(whiteMove);
+
             ClientHandler.broadcastPlayer(players.get(1), whiteMove); // send update to black player
 
             broadcast(whiteMove);
@@ -159,11 +163,17 @@ public class Server {
             // black player
             Move blackMove = players.get(1).handleMessagePlayer(COLOR_BLACK);
 
+            recordMove(blackMove);
+
             broadcast(blackMove);
 
             ClientHandler.broadcastPlayer(players.get(0), blackMove); // send update to white player
 
         }
+    }
+
+    private static void recordMove(Move blackMove) {
+        //
     }
 
     private static boolean isPlayerAlive(int playerIndex) {

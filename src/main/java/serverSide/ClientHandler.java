@@ -1,5 +1,7 @@
 package serverSide;
 
+import chess.model.BoardState;
+
 import java.io.*;
 import java.net.Socket;
 import java.util.Scanner;
@@ -272,7 +274,7 @@ public class ClientHandler {
         LOGGER.info("Client handler cleanup completed");
     }
 
-    public void sendFullBoard(Board board) {
+    public void sendFullBoard(BoardState board) {
         printWriter.println("MID_GAME");
         printWriter.flush();
     }

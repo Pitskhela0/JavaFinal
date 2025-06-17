@@ -11,6 +11,7 @@ public class PlayerClient {
     private Scanner serverScanner;
     private PrintWriter printWriter;
     private Scanner userInputScanner;
+
     public PlayerClient(boolean isWhite, ServerConnector serverConnector, Scanner serverScanner, PrintWriter printWriter,
                         Scanner userInputScanner){
         this.isWhite = isWhite;
