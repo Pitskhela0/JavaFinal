@@ -1,6 +1,10 @@
 package serverSide;
 
 import chess.model.BoardState;
+import chess.model.Square;
+import chess.model.pieces.Piece;
+import shared.GameState;
+import shared.ChessMove;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -24,14 +28,14 @@ public class Server {
 
     private static List<ClientHandler> spectators = Collections.synchronizedList(new ArrayList<>());
     private static final List<ClientHandler> players = Collections.synchronizedList(new ArrayList<>());
-    private static BoardState board;
+    private static BoardState gameBoard; // Server maintains authoritative game state
 
     private static final AtomicBoolean gameFinished = new AtomicBoolean(false);
     private static final AtomicBoolean gameStarted = new AtomicBoolean(false);
     private static ServerSocket serverSocket;
 
     public static BoardState getBoard() {
-        return board;
+        return gameBoard;
     }
 
     public static void setGameStarted(boolean started) {
@@ -137,89 +141,188 @@ public class Server {
         LOGGER.info("Starting game with 2 players");
         gameStarted.set(true);
 
-        // start the game
-        while (!gameFinished.get()){
-            // initialize game
+        // Initialize the game board on server
+        gameBoard = new BoardState();
 
-            if(!players.get(0).getIsAlive() || !players.get(1).getIsAlive()){
-                System.out.println("White player is out");
+        // Send initial game state to both players and spectators
+        GameState initialState = new GameState(gameBoard);
+        broadcastGameState(initialState);
+
+        LOGGER.info("Initial game state broadcasted");
+
+        // Game loop
+        int turnCount = 0;
+        while (!gameFinished.get() && bothPlayersAlive()) {
+            turnCount++;
+            LOGGER.info("Starting turn " + turnCount);
+
+            // White player's turn
+            LOGGER.info("White player's turn");
+            if (!handlePlayerTurn(0, true)) {
+                LOGGER.info("White player turn failed, ending game");
                 break;
             }
 
-            Move whiteMove = players.get(0).handleMessagePlayer(COLOR_WHITE);
-
-            recordMove(whiteMove);
-
-            ClientHandler.broadcastPlayer(players.get(1), whiteMove); // send update to black player
-
-            broadcast(whiteMove);
-
-
-            if(!players.get(0).getIsAlive() || !players.get(1).getIsAlive()){
-                System.out.println("black player is out");
+            // Check for game end after white's move
+            if (isGameFinished()) {
+                LOGGER.info("Game finished after white's move");
                 break;
             }
 
-            // black player
-            Move blackMove = players.get(1).handleMessagePlayer(COLOR_BLACK);
+            // Black player's turn
+            LOGGER.info("Black player's turn");
+            if (!handlePlayerTurn(1, false)) {
+                LOGGER.info("Black player turn failed, ending game");
+                break;
+            }
 
-            recordMove(blackMove);
-
-            broadcast(blackMove);
-
-            ClientHandler.broadcastPlayer(players.get(0), blackMove); // send update to white player
-
+            // Check for game end after black's move
+            if (isGameFinished()) {
+                LOGGER.info("Game finished after black's move");
+                break;
+            }
         }
+
+        LOGGER.info("Game loop ended, calling endGame()");
+        endGame();
     }
 
-    private static void recordMove(Move blackMove) {
-        //
-    }
-
-    private static boolean isPlayerAlive(int playerIndex) {
+    private static boolean handlePlayerTurn(int playerIndex, boolean isWhite) {
         try {
-            return playerIndex < players.size() && players.get(playerIndex).getIsAlive();
+            String color = isWhite ? COLOR_WHITE : COLOR_BLACK;
+            LOGGER.info("Requesting move from " + color + " player");
+
+            // Check if player is still alive before requesting move
+            if (!isPlayerAlive(playerIndex)) {
+                LOGGER.warning(color + " player is not alive");
+                endGame();
+                return false;
+            }
+
+            // Request move from current player
+            ChessMove move = players.get(playerIndex).requestMoveFromPlayer();
+
+            if (move == null) {
+                LOGGER.warning("Received null move from " + color + " player");
+                endGame();
+                return false;
+            }
+
+            if (!move.isNormalMove()) {
+                LOGGER.info("Game ending move received from " + color + ": " + move.getMoveType());
+                endGame();
+                return false;
+            }
+
+            // Validate and apply move on server's board
+            if (validateAndApplyMove(move, isWhite)) {
+                // Create updated game state
+                GameState newState = new GameState(gameBoard);
+                newState.setLastMove(move.toChessNotation());
+                newState.incrementMoveCount();
+
+                LOGGER.info("Valid move applied: " + move.toChessNotation());
+
+                // Broadcast to all clients
+                broadcastGameState(newState);
+
+                // Check for game end conditions
+                if (newState.isGameOver()) {
+                    LOGGER.info("Game over detected: " + newState.getWinner());
+                    // Don't call endGame() here, let the game loop handle it naturally
+                    return false;
+                }
+
+                return true;
+            } else {
+                // Invalid move - ask player to try again
+                LOGGER.warning("Invalid move attempted by " + color + ": " + move);
+                players.get(playerIndex).sendInvalidMoveMessage();
+                return handlePlayerTurn(playerIndex, isWhite); // Retry
+            }
+
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "Error checking player alive status", e);
+            LOGGER.log(Level.WARNING, "Error in player turn for " + (isWhite ? "white" : "black"), e);
             return false;
         }
     }
 
-    private static Move handlePlayerMove(int playerIndex, String color) {
+    private static boolean validateAndApplyMove(ChessMove move, boolean isWhite) {
         try {
-            if (playerIndex >= players.size()) {
-                LOGGER.warning("Invalid player index: " + playerIndex);
-                return new Move("error");
+            Square[][] board = gameBoard.getSquareArray();
+            Square fromSquare = board[move.getFromRow()][move.getFromCol()];
+            Square toSquare = board[move.getToRow()][move.getToCol()];
+
+            Piece piece = fromSquare.getOccupyingPiece();
+
+            // Validate move
+            if (piece == null) {
+                LOGGER.warning("No piece at source position");
+                return false;
             }
 
-            return players.get(playerIndex).handleMessagePlayer(color);
-        } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "Error handling player move for " + color, e);
-            return new Move("error");
-        }
-    }
+            if ((piece.getColor() == 1) != isWhite) {
+                LOGGER.warning("Wrong color piece moved");
+                return false;
+            }
 
-    private static boolean isGameEndingMove(Move move) {
-        if (move == null) {
+            if (!piece.getLegalMoves(gameBoard).contains(toSquare)) {
+                LOGGER.warning("Illegal move for piece");
+                return false;
+            }
+
+            if (!gameBoard.isKingSafeAfterMove(piece, toSquare)) {
+                LOGGER.warning("Move would put king in check");
+                return false;
+            }
+
+            // Apply move
+            gameBoard.commitMove(fromSquare, toSquare, piece);
+            LOGGER.info("Move applied successfully");
+
             return true;
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Error validating move", e);
+            return false;
         }
-
-        String moveString = move.getMove();
-        return "resign".equals(moveString) || "error".equals(moveString);
     }
 
-    private static void broadcastMove(Move move, int targetPlayerIndex) {
-        try {
-            // Send to target player
-            if (targetPlayerIndex < players.size()) {
-                ClientHandler.broadcastPlayer(players.get(targetPlayerIndex), move);
-            }
+    private static boolean bothPlayersAlive() {
+        return players.size() >= 2 &&
+                players.get(0).getIsAlive() &&
+                players.get(1).getIsAlive();
+    }
 
-            // Send to all spectators
-            broadcast(move);
+    private static boolean isPlayerAlive(int playerIndex) {
+        try {
+            return playerIndex >= 0 &&
+                    playerIndex < players.size() &&
+                    players.get(playerIndex) != null &&
+                    players.get(playerIndex).getIsAlive();
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "Error broadcasting move", e);
+            LOGGER.log(Level.WARNING, "Error checking player alive status for index " + playerIndex, e);
+            return false;
         }
+    }
+
+    private static boolean isGameFinished() {
+        return gameFinished.get() || gameBoard == null || !bothPlayersAlive();
+    }
+
+    private static void broadcastGameState(GameState gameState) {
+        LOGGER.info("Broadcasting game state to all clients");
+
+        // Send to all players and spectators
+        List<ClientHandler> allClients = new ArrayList<>(players);
+        allClients.addAll(spectators);
+
+        allClients.forEach(client -> {
+            try {
+                client.sendGameState(gameState);
+            } catch (Exception e) {
+                LOGGER.log(Level.WARNING, "Error sending game state to client", e);
+            }
+        });
     }
 
     public static void endGame() {
@@ -272,23 +375,33 @@ public class Server {
     }
 
     public static void kickoutSpectator(){
-        spectators = spectators.stream().filter((element) -> element.getIsAlive()).collect(Collectors.toList());
+        spectators = spectators.stream()
+                .filter(ClientHandler::getIsAlive)
+                .collect(Collectors.toList());
     }
 
-    // Broadcasts moves to spectators
-    public static void broadcast(Move move) {
-        if (move == null) {
-            LOGGER.warning("Cannot broadcast null move");
+    // Broadcasts game state to spectators
+    public static void broadcast(GameState gameState) {
+        if (gameState == null) {
+            LOGGER.warning("Cannot broadcast null game state");
             return;
         }
 
         Thread.startVirtualThread(() -> {
             try {
-                spectators = spectators.stream().filter((client -> client.getMoveSocket() != null)).collect(Collectors.toList());
+                spectators = spectators.stream()
+                        .filter(client -> client.getMoveSocket() != null)
+                        .collect(Collectors.toList());
 
-                spectators.forEach((client) -> client.sendUpdate(move));
+                spectators.forEach(client -> {
+                    try {
+                        client.sendGameState(gameState);
+                    } catch (Exception e) {
+                        LOGGER.log(Level.WARNING, "Error broadcasting to spectator", e);
+                    }
+                });
 
-                LOGGER.fine("Broadcasted move to " + spectators.size() + " spectators");
+                LOGGER.fine("Broadcasted game state to " + spectators.size() + " spectators");
             } catch (Exception e) {
                 LOGGER.log(Level.WARNING, "Error during broadcast", e);
             }

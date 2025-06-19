@@ -1,6 +1,7 @@
 package serverSide;
 
-import chess.model.BoardState;
+import shared.GameState;
+import shared.ChessMove;
 
 import java.io.*;
 import java.net.Socket;
@@ -28,7 +29,7 @@ public class ClientHandler {
     public boolean getIsAlive(){
         return isAlive;
     }
-    private final Scanner hearbeatScanner;
+    private final Scanner heartbeatScanner;
 
     public ClientHandler(Socket socket, Socket heartbeatSocket) {
         InputStream inputStream1;
@@ -47,7 +48,7 @@ public class ClientHandler {
         printWriter = new PrintWriter(outputStream, true);
         scanner = new Scanner(inputStream);
 
-        hearbeatScanner = new Scanner(inputStream1);
+        heartbeatScanner = new Scanner(inputStream1);
         Thread.startVirtualThread(this::handleHeartbeat);
 
         LOGGER.info("ClientHandler initialized for new connection");
@@ -72,7 +73,7 @@ public class ClientHandler {
 
         while (true){
             // check if waiting is too long here
-            while (!hearbeatScanner.hasNextLine()){
+            while (!heartbeatScanner.hasNextLine()){
                 if(System.currentTimeMillis() - lastHeartbeat > 1000){
                     System.out.println("wait time is out, good bye client");
                     LOGGER.warning("Heartbeat timeout - client disconnected");
@@ -90,7 +91,7 @@ public class ClientHandler {
             if(clientOut){
                 break;
             }
-            String heartbeat = hearbeatScanner.nextLine();
+            String heartbeat = heartbeatScanner.nextLine();
             System.out.println(heartbeat);
             LOGGER.fine("Received heartbeat: " + heartbeat);
 
@@ -106,17 +107,6 @@ public class ClientHandler {
         }
         else {
             Server.kickoutSpectator();
-        }
-    }
-
-    public static void broadcastPlayer(ClientHandler client, Move move) {
-        try {
-            client.printWriter.println("update");
-            client.printWriter.println(move.getMove());
-            client.printWriter.flush();
-        } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "Error broadcasting to player", e);
-            System.out.println("Error broadcasting to player: " + e.getMessage());
         }
     }
 
@@ -163,8 +153,9 @@ public class ClientHandler {
                     printWriter.flush();
 
                     if(Server.isGameStarted()){
-                        // mid game spectator
-                        sendFullBoard(Server.getBoard());
+                        // mid game spectator - send current game state
+                        GameState currentState = new GameState(Server.getBoard());
+                        sendGameState(currentState);
                     }
                 } else {
                     // informative message
@@ -219,40 +210,85 @@ public class ClientHandler {
         }
     }
 
-    // if client is spectator, use for broadcasting
-    public void sendUpdate(Move move) {
+    // Send game state to client
+    public void sendGameState(GameState gameState) {
         try {
-            printWriter.println(move.getMove());
+            printWriter.println("GAME_STATE_UPDATE");
+            printWriter.println(serializeGameState(gameState));
             printWriter.flush();
+            LOGGER.fine("Game state sent to client");
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "Error sending update to spectator", e);
-            System.out.println("Error sending update to spectator: " + e.getMessage());
+            LOGGER.log(Level.WARNING, "Error sending game state", e);
         }
     }
 
-    public Move handleMessagePlayer(String color) {
+    // Request move from player and return ChessMove object
+    public ChessMove requestMoveFromPlayer() {
         try {
-            printWriter.println("enter your move");
+            printWriter.println("REQUEST_MOVE");
             printWriter.flush();
+            LOGGER.info("Move requested from player");
 
             if (!scanner.hasNextLine()) {
-                // Player disconnected - end the game immediately
-                System.out.println(color + " player disconnected");
-                LOGGER.warning(color + " player disconnected");
-                Server.endGame();
-                return new Move("resign");
+                LOGGER.warning("Player disconnected during move request");
+                return null; // Player disconnected
             }
 
-            String input = scanner.nextLine().trim();
-            System.out.println("Move from " + color + " player: " + input);
-            LOGGER.info("Move from " + color + " player: " + input);
-            return new Move(input);
+            String moveString = scanner.nextLine().trim();
+            LOGGER.info("Received move string: " + moveString);
+
+            ChessMove move = ChessMove.fromString(moveString);
+            LOGGER.info("Parsed move: " + move);
+
+            return move;
+
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error getting move from " + color + " player", e);
-            System.out.println("Error getting move from " + color + " player: " + e.getMessage());
-            Server.endGame(); // End game on any communication error
-            return new Move("error");
+            LOGGER.log(Level.WARNING, "Error requesting move from player", e);
+            return ChessMove.error();
         }
+    }
+
+    // Send invalid move message to player
+    public void sendInvalidMoveMessage() {
+        try {
+            printWriter.println("INVALID_MOVE");
+            printWriter.println("Invalid move. Please try again.");
+            printWriter.flush();
+            LOGGER.info("Invalid move message sent to player");
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Error sending invalid move message", e);
+        }
+    }
+
+    // Serialize GameState to string format for transmission
+    private String serializeGameState(GameState gameState) {
+        StringBuilder sb = new StringBuilder();
+
+        // Serialize board state
+        String[][] board = gameState.getBoard();
+        for (int row = 0; row < 8; row++) {
+            for (int col = 0; col < 8; col++) {
+                if (board[row][col] != null) {
+                    sb.append(row).append(",").append(col).append(",").append(board[row][col]).append(";");
+                }
+            }
+        }
+
+        // Always add the separator, even if board is empty
+        sb.append("|");
+
+        // Serialize metadata
+        sb.append("whiteTurn:").append(gameState.isWhiteTurn()).append(";");
+        sb.append("whiteInCheck:").append(gameState.isWhiteInCheck()).append(";");
+        sb.append("blackInCheck:").append(gameState.isBlackInCheck()).append(";");
+        sb.append("gameOver:").append(gameState.isGameOver()).append(";");
+        sb.append("winner:").append(gameState.getWinner() != null ? gameState.getWinner() : "none").append(";");
+        sb.append("moveCount:").append(gameState.getMoveCount()).append(";");
+        sb.append("lastMove:").append(gameState.getLastMove() != null ? gameState.getLastMove() : "none");
+
+        String result = sb.toString();
+        LOGGER.info("Serialized game state: " + result);
+        return result;
     }
 
     private void cleanup() {
@@ -272,11 +308,6 @@ public class ClientHandler {
             System.out.println("Error during cleanup: " + e.getMessage());
         }
         LOGGER.info("Client handler cleanup completed");
-    }
-
-    public void sendFullBoard(BoardState board) {
-        printWriter.println("MID_GAME");
-        printWriter.flush();
     }
 
     public void close() {
@@ -304,9 +335,9 @@ public class ClientHandler {
             writer.flush();
             writer.close();
 
-            // Send resign through main socket
-            printWriter.println("update");
-            printWriter.println("resign");
+            // Send game end through main socket
+            printWriter.println("GAME_END");
+            printWriter.println("Game has ended");
             printWriter.flush();
 
             // Close sockets after a brief delay to ensure messages are sent
