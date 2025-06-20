@@ -41,11 +41,11 @@ public class NetworkGameWindow {
         JPanel infoPanel = createInfoPanel();
 
         // Create button panel
-        JPanel buttonPanel = createButtonPanel();
+//        JPanel buttonPanel = createButtonPanel();
 
         gameWindow.add(infoPanel, BorderLayout.NORTH);
         gameWindow.add(boardPanel, BorderLayout.CENTER);
-        gameWindow.add(buttonPanel, BorderLayout.SOUTH);
+//        gameWindow.add(buttonPanel, BorderLayout.SOUTH);
 
         gameWindow.pack();
         gameWindow.setResizable(false);
@@ -81,32 +81,32 @@ public class NetworkGameWindow {
         return infoPanel;
     }
 
-    private JPanel createButtonPanel() {
-        JPanel buttonPanel = new JPanel(new FlowLayout());
-
-        if (playerRole.equals("player")) {
-            JButton resignButton = new JButton("Resign");
-            resignButton.addActionListener(e -> {
-                int confirm = JOptionPane.showConfirmDialog(
-                        gameWindow,
-                        "Are you sure you want to resign?",
-                        "Confirm Resignation",
-                        JOptionPane.YES_NO_OPTION
-                );
-                if (confirm == JOptionPane.YES_OPTION && playerClient != null) {
-                    playerClient.sendResignation();
-                }
-            });
-            buttonPanel.add(resignButton);
-        }
-
-        JButton closeButton = new JButton("Close");
-        // FIX: Make close button do the same as X button
-        closeButton.addActionListener(e -> handleWindowClose());
-        buttonPanel.add(closeButton);
-
-        return buttonPanel;
-    }
+//    private JPanel createButtonPanel() {
+//        JPanel buttonPanel = new JPanel(new FlowLayout());
+//
+//        if (playerRole.equals("player")) {
+//            JButton resignButton = new JButton("Resign");
+//            resignButton.addActionListener(e -> {
+//                int confirm = JOptionPane.showConfirmDialog(
+//                        gameWindow,
+//                        "Are you sure you want to resign?",
+//                        "Confirm Resignation",
+//                        JOptionPane.YES_NO_OPTION
+//                );
+//                if (confirm == JOptionPane.YES_OPTION && playerClient != null) {
+//                    playerClient.sendResignation();
+//                }
+//            });
+//            buttonPanel.add(resignButton);
+//        }
+//
+//        JButton closeButton = new JButton("Close");
+//        // FIX: Make close button do the same as X button
+//        closeButton.addActionListener(e -> handleWindowClose());
+//        buttonPanel.add(closeButton);
+//
+//        return buttonPanel;
+//    }
 
     // NEW METHOD: Handle both X button and Close button the same way
     private void handleWindowClose() {

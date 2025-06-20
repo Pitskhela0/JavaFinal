@@ -3,7 +3,7 @@ package startMenu;
 
 import clientSide.Client;
 import serverSide.Server;
-import startMenu.menyStyling.MenuStyles;
+import startMenu.menuStyling.MenuStyles;
 
 import javax.swing.*;
 import java.awt.*;
@@ -21,6 +21,10 @@ public class ClientConnection extends JFrame{
     public ClientConnection(){
 
     }
+
+
+    private boolean hosting = false;
+
 
     public void start(){
         // main menu logic

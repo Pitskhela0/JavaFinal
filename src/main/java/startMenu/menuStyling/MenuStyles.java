@@ -1,4 +1,4 @@
-package startMenu.menyStyling;
+package startMenu.menuStyling;
 
 import javax.swing.*;
 import java.awt.*;
