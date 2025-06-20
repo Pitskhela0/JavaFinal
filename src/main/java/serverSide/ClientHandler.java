@@ -42,7 +42,7 @@ public class ClientHandler {
             inputStream = socket.getInputStream();
             inputStream1 = new BufferedInputStream(heartbeatSocket.getInputStream());
         } catch (IOException e) {
-            LOGGER.log(Level.SEVERE, "Failed to initialize ClientHandler streams", e);
+            LOGGER.log(Level.SEVERE, "Server - Failed to initialize ClientHandler streams", e);
             throw new RuntimeException(e);
         }
         printWriter = new PrintWriter(outputStream, true);
@@ -51,7 +51,7 @@ public class ClientHandler {
         heartbeatScanner = new Scanner(inputStream1);
         Thread.startVirtualThread(this::handleHeartbeat);
 
-        LOGGER.info("ClientHandler initialized for new connection");
+        LOGGER.info("Server - ClientHandler initialized for new connection");
     }
 
     public void handleClient() {
@@ -59,14 +59,14 @@ public class ClientHandler {
             // role assignment
             assignRole();
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error handling client", e);
+            LOGGER.log(Level.SEVERE, "Server - Error handling client", e);
             System.out.println("Error handling client: " + e.getMessage());
             cleanup();
         }
     }
 
     private void handleHeartbeat() {
-        LOGGER.info("Starting heartbeat monitoring");
+        LOGGER.info("Server - Starting heartbeat monitoring");
         boolean clientOut = false;
 
         long lastHeartbeat = System.currentTimeMillis();
@@ -76,7 +76,7 @@ public class ClientHandler {
             while (!heartbeatScanner.hasNextLine()){
                 if(System.currentTimeMillis() - lastHeartbeat > 1000){
                     System.out.println("wait time is out, good bye client");
-                    LOGGER.warning("Heartbeat timeout - client disconnected");
+                    LOGGER.warning("Server - Heartbeat timeout - client disconnected");
                     clientOut = true;
                     break;
                 }
@@ -84,7 +84,7 @@ public class ClientHandler {
                     Thread.sleep(200);
                 }
                 catch (InterruptedException e){
-                    LOGGER.log(Level.WARNING, "Heartbeat thread interrupted", e);
+                    LOGGER.log(Level.WARNING, "Server - Heartbeat thread interrupted", e);
                     throw new IndexOutOfBoundsException();
                 }
             }
@@ -93,13 +93,13 @@ public class ClientHandler {
             }
             String heartbeat = heartbeatScanner.nextLine();
             System.out.println(heartbeat);
-            LOGGER.fine("Received heartbeat: " + heartbeat);
+            LOGGER.fine("Server - Received heartbeat: " + heartbeat);
 
             lastHeartbeat = System.currentTimeMillis();
 
         }
         System.out.println("heartbeat very out");
-        LOGGER.info("Heartbeat monitoring ended");
+        LOGGER.info("Server - Heartbeat monitoring ended");
         isAlive = false;
 
         if(isPlayer){
@@ -111,7 +111,7 @@ public class ClientHandler {
     }
 
     private void assignRole() {
-        LOGGER.info("Starting role assignment");
+        LOGGER.info("Server - Starting role assignment");
         while (!assigned && moveSocket.isConnected()) {
             try {
                 System.out.println("Current players: " + Server.getPlayers().size());
@@ -122,7 +122,7 @@ public class ClientHandler {
 
                 String userInput = scanner.nextLine().trim();
                 System.out.println("Role request: " + userInput);
-                LOGGER.info("Role request: " + userInput);
+                LOGGER.info("Server - Role request: " + userInput);
 
                 if (userInput.equals("player")) {
                     if (Server.getPlayers().size() >= 2) {
@@ -140,12 +140,12 @@ public class ClientHandler {
                         assigned = true;
                         isPlayer = true;
                         System.out.println("Player has connected");
-                        LOGGER.info("Player has connected");
+                        LOGGER.info("Server - Player has connected");
                     }
                 } else if (userInput.equals("spectator")) {
                     assigned = true;
                     System.out.println("Spectator has connected");
-                    LOGGER.info("Spectator has connected");
+                    LOGGER.info("Server - Spectator has connected");
                     // informative message
                     printWriter.println("You successfully connected to server as Spectator");
                     // acknowledgement
@@ -165,7 +165,7 @@ public class ClientHandler {
                     printWriter.flush();
                 }
             } catch (Exception e) {
-                LOGGER.log(Level.WARNING, "Client disconnected during role assignment", e);
+                LOGGER.log(Level.WARNING, "Server - Client disconnected during role assignment", e);
                 System.out.println("Client disconnected during role assignment");
                 break;
             }
@@ -176,20 +176,20 @@ public class ClientHandler {
                 synchronized (Server.getPlayers()) {
                     Server.getPlayers().add(this);
                     System.out.println("Total players: " + Server.getPlayers().size());
-                    LOGGER.info("Total players: " + Server.getPlayers().size());
+                    LOGGER.info("Server - Total players: " + Server.getPlayers().size());
 
                     if (Server.getPlayers().size() == 1) {
                         isWhitePlayer = true;
                         printWriter.println("white");
                         printWriter.flush();
                         System.out.println("Assigned as White player");
-                        LOGGER.info("Assigned as White player");
+                        LOGGER.info("Server - Assigned as White player");
                     } else {
                         isWhitePlayer = false;
                         printWriter.println("black");
                         printWriter.flush();
                         System.out.println("Assigned as Black player");
-                        LOGGER.info("Assigned as Black player");
+                        LOGGER.info("Server - Assigned as Black player");
                     }
                 }
 
@@ -202,7 +202,7 @@ public class ClientHandler {
                 synchronized (Server.getSpectators()) {
                     Server.getSpectators().add(this);
                     System.out.println("Total spectators: " + Server.getSpectators().size());
-                    LOGGER.info("Total spectators: " + Server.getSpectators().size());
+                    LOGGER.info("Server - Total spectators: " + Server.getSpectators().size());
                 }
             }
         } else {
@@ -216,9 +216,9 @@ public class ClientHandler {
             printWriter.println("GAME_STATE_UPDATE");
             printWriter.println(serializeGameState(gameState));
             printWriter.flush();
-            LOGGER.fine("Game state sent to client");
+            LOGGER.fine("Server - Game state sent to client");
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "Error sending game state", e);
+            LOGGER.log(Level.WARNING, "Server - Error sending game state", e);
         }
     }
 
@@ -227,23 +227,23 @@ public class ClientHandler {
         try {
             printWriter.println("REQUEST_MOVE");
             printWriter.flush();
-            LOGGER.info("Move requested from player");
+            LOGGER.info("Server - Move requested from player");
 
             if (!scanner.hasNextLine()) {
-                LOGGER.warning("Player disconnected during move request");
+                LOGGER.warning("Server - Player disconnected during move request");
                 return null; // Player disconnected
             }
 
             String moveString = scanner.nextLine().trim();
-            LOGGER.info("Received move string: " + moveString);
+            LOGGER.info("Server - Received move string: " + moveString);
 
             ChessMove move = ChessMove.fromString(moveString);
-            LOGGER.info("Parsed move: " + move);
+            LOGGER.info("Server - Parsed move: " + move);
 
             return move;
 
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "Error requesting move from player", e);
+            LOGGER.log(Level.WARNING, "Server - Error requesting move from player", e);
             return ChessMove.error();
         }
     }
@@ -254,9 +254,9 @@ public class ClientHandler {
             printWriter.println("INVALID_MOVE");
             printWriter.println("Invalid move. Please try again.");
             printWriter.flush();
-            LOGGER.info("Invalid move message sent to player");
+            LOGGER.info("Server - Invalid move message sent to player");
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "Error sending invalid move message", e);
+            LOGGER.log(Level.WARNING, "Server - Error sending invalid move message", e);
         }
     }
 
@@ -287,12 +287,12 @@ public class ClientHandler {
         sb.append("lastMove:").append(gameState.getLastMove() != null ? gameState.getLastMove() : "none");
 
         String result = sb.toString();
-        LOGGER.info("Serialized game state: " + result);
+        LOGGER.info("Server - Serialized game state: " + result);
         return result;
     }
 
     private void cleanup() {
-        LOGGER.info("Starting client handler cleanup");
+        LOGGER.info("Server - Starting client handler cleanup");
         try {
             if (scanner != null) {
                 scanner.close();
@@ -304,10 +304,10 @@ public class ClientHandler {
                 moveSocket.close();
             }
         } catch (IOException e) {
-            LOGGER.log(Level.WARNING, "Error during cleanup", e);
+            LOGGER.log(Level.WARNING, "Server - Error during cleanup", e);
             System.out.println("Error during cleanup: " + e.getMessage());
         }
-        LOGGER.info("Client handler cleanup completed");
+        LOGGER.info("Server - Client handler cleanup completed");
     }
 
     public void close() {
@@ -318,14 +318,14 @@ public class ClientHandler {
             if(isPlayer){
                 if(isWhitePlayer){
                     System.out.println("game end was sent to white player");
-                    LOGGER.info("Game end sent to white player");
+                    LOGGER.info("Server - Game end sent to white player");
                 } else {
                     System.out.println("game end was sent to black player");
-                    LOGGER.info("Game end sent to black player");
+                    LOGGER.info("Server - Game end sent to black player");
                 }
             } else {
                 System.out.println("game end was sent to spectator");
-                LOGGER.info("Game end sent to spectator");
+                LOGGER.info("Server - Game end sent to spectator");
             }
 
             // Send GAME_END through heartbeat socket
@@ -352,7 +352,7 @@ public class ClientHandler {
             }
 
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "Error closing client handler", e);
+            LOGGER.log(Level.WARNING, "Server - Error closing client handler", e);
             System.out.println("Error closing client handler: " + e.getMessage());
         }
     }

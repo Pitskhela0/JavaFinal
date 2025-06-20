@@ -20,7 +20,8 @@ import java.util.logging.Level;
 
 public class Server {
     private static final Logger LOGGER = Logger.getLogger(Server.class.getName());
-    private static final int SERVER_PORT = 10000;
+    private static int SERVER_PORT;
+    private int GAME_ID;
     private static final int SHUTDOWN_DELAY_MS = 500;
     private static final String COLOR_WHITE = "white";
     private static final String COLOR_BLACK = "black";
@@ -34,13 +35,18 @@ public class Server {
     private static final AtomicBoolean gameStarted = new AtomicBoolean(false);
     private static ServerSocket serverSocket;
 
+    public Server(int port, int gameID){
+        SERVER_PORT = port;
+        GAME_ID = gameID;
+    }
+
     public static BoardState getBoard() {
         return gameBoard;
     }
 
     public static void setGameStarted(boolean started) {
         gameStarted.set(started);
-        LOGGER.info("Game started status changed to: " + started);
+        LOGGER.info("Server - Game started status changed to: " + started);
     }
 
     public static boolean isGameStarted() {
@@ -55,27 +61,40 @@ public class Server {
         return players;
     }
 
-    public static void main(String[] args) {
-        LOGGER.info("Starting server on port " + SERVER_PORT);
+    public void start(){
+        LOGGER.info("Server - Starting server on port " + SERVER_PORT);
 
         try {
             initializeServer();
             runServer();
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Fatal server error", e);
+            LOGGER.log(Level.SEVERE, "Server - Fatal server error", e);
         } finally {
             cleanup();
         }
     }
 
+//    public static void main(String[] args) {
+//        LOGGER.info("Server - Starting server on port " + SERVER_PORT);
+//
+//        try {
+//            initializeServer();
+//            runServer();
+//        } catch (Exception e) {
+//            LOGGER.log(Level.SEVERE, "Server - Fatal server error", e);
+//        } finally {
+//            cleanup();
+//        }
+//    }
+
     private static void initializeServer() throws IOException {
         try {
             if (!gameFinished.get()) {
                 serverSocket = new ServerSocket(SERVER_PORT);
-                LOGGER.info("Server socket created successfully on port " + SERVER_PORT);
+                LOGGER.info("Server - Server socket created successfully on port " + SERVER_PORT);
             }
         } catch (IOException e) {
-            LOGGER.log(Level.SEVERE, "Failed to create server socket", e);
+            LOGGER.log(Level.SEVERE, "Server - Failed to create server socket", e);
             throw new RuntimeException("Failed to initialize server", e);
         }
     }
@@ -83,14 +102,14 @@ public class Server {
     private static void runServer() {
         while (!gameFinished.get()) {
             try {
-                LOGGER.info("Waiting for client connections...");
+                LOGGER.info("Server - Waiting for client connections...");
                 Socket socket = serverSocket.accept();
-                LOGGER.info("New client connected from: " + socket.getRemoteSocketAddress());
+                LOGGER.info("Server - New client connected from: " + socket.getRemoteSocketAddress());
 
                 handleNewClient(socket);
             } catch (IOException e) {
                 if (!gameFinished.get()) {
-                    LOGGER.log(Level.WARNING, "Error accepting client connection", e);
+                    LOGGER.log(Level.WARNING, "Server - Error accepting client connection", e);
                 }
                 System.out.println("Server is closing");
                 break;
@@ -104,7 +123,7 @@ public class Server {
             ServerSocket heartbeatServerSocket = new ServerSocket(0); // 0 means OS will find available random port
             int heartbeatPort = heartbeatServerSocket.getLocalPort();
 
-            LOGGER.info("Created heartbeat socket on port: " + heartbeatPort);
+            LOGGER.info("Server - Created heartbeat socket on port: " + heartbeatPort);
 
             // Send heartbeat port to client
             PrintWriter writer = new PrintWriter(socket.getOutputStream(), true);
@@ -113,7 +132,7 @@ public class Server {
 
             // Accept heartbeat connection
             Socket heartbeatSocket = heartbeatServerSocket.accept();
-            LOGGER.info("Heartbeat connection established");
+            LOGGER.info("Server - Heartbeat connection established");
             System.out.println("Current players: " + players.size());
 
             // Create client handler
@@ -126,19 +145,19 @@ public class Server {
             heartbeatServerSocket.close();
 
         } catch (IOException e) {
-            LOGGER.log(Level.SEVERE, "Error handling new client", e);
+            LOGGER.log(Level.SEVERE, "Server - Error handling new client", e);
             try {
                 if (!socket.isClosed()) {
                     socket.close();
                 }
             } catch (IOException closeEx) {
-                LOGGER.log(Level.WARNING, "Error closing client socket", closeEx);
+                LOGGER.log(Level.WARNING, "Server - Error closing client socket", closeEx);
             }
         }
     }
 
     static void startGame() {
-        LOGGER.info("Starting game with 2 players");
+        LOGGER.info("Server - Starting game with 2 players");
         gameStarted.set(true);
 
         // Initialize the game board on server
@@ -148,53 +167,53 @@ public class Server {
         GameState initialState = new GameState(gameBoard);
         broadcastGameState(initialState);
 
-        LOGGER.info("Initial game state broadcasted");
+        LOGGER.info("Server - Initial game state broadcasted");
 
         // Game loop
         int turnCount = 0;
         while (!gameFinished.get() && bothPlayersAlive()) {
             turnCount++;
-            LOGGER.info("Starting turn " + turnCount);
+            LOGGER.info("Server - Starting turn " + turnCount);
 
             // White player's turn
-            LOGGER.info("White player's turn");
+            LOGGER.info("Server - White player's turn");
             if (!handlePlayerTurn(0, true)) {
-                LOGGER.info("White player turn failed, ending game");
+                LOGGER.info("Server - White player turn failed, ending game");
                 break;
             }
 
             // Check for game end after white's move
             if (isGameFinished()) {
-                LOGGER.info("Game finished after white's move");
+                LOGGER.info("Server - Game finished after white's move");
                 break;
             }
 
             // Black player's turn
-            LOGGER.info("Black player's turn");
+            LOGGER.info("Server - Black player's turn");
             if (!handlePlayerTurn(1, false)) {
-                LOGGER.info("Black player turn failed, ending game");
+                LOGGER.info("Server - Black player turn failed, ending game");
                 break;
             }
 
             // Check for game end after black's move
             if (isGameFinished()) {
-                LOGGER.info("Game finished after black's move");
+                LOGGER.info("Server - Game finished after black's move");
                 break;
             }
         }
 
-        LOGGER.info("Game loop ended, calling endGame()");
+        LOGGER.info("Server - Game loop ended, calling endGame()");
         endGame();
     }
 
     private static boolean handlePlayerTurn(int playerIndex, boolean isWhite) {
         try {
             String color = isWhite ? COLOR_WHITE : COLOR_BLACK;
-            LOGGER.info("Requesting move from " + color + " player");
+            LOGGER.info("Server - Requesting move from " + color + " player");
 
             // Check if player is still alive before requesting move
             if (!isPlayerAlive(playerIndex)) {
-                LOGGER.warning(color + " player is not alive");
+                LOGGER.warning("Server - " + color + " player is not alive");
                 endGame();
                 return false;
             }
@@ -203,13 +222,13 @@ public class Server {
             ChessMove move = players.get(playerIndex).requestMoveFromPlayer();
 
             if (move == null) {
-                LOGGER.warning("Received null move from " + color + " player");
+                LOGGER.warning("Server - Received null move from " + color + " player");
                 endGame();
                 return false;
             }
 
             if (!move.isNormalMove()) {
-                LOGGER.info("Game ending move received from " + color + ": " + move.getMoveType());
+                LOGGER.info("Server - Game ending move received from " + color + ": " + move.getMoveType());
                 endGame();
                 return false;
             }
@@ -221,14 +240,14 @@ public class Server {
                 newState.setLastMove(move.toChessNotation());
                 newState.incrementMoveCount();
 
-                LOGGER.info("Valid move applied: " + move.toChessNotation());
+                LOGGER.info("Server - Valid move applied: " + move.toChessNotation());
 
                 // Broadcast to all clients
                 broadcastGameState(newState);
 
                 // Check for game end conditions
                 if (newState.isGameOver()) {
-                    LOGGER.info("Game over detected: " + newState.getWinner());
+                    LOGGER.info("Server - Game over detected: " + newState.getWinner());
                     // Don't call endGame() here, let the game loop handle it naturally
                     return false;
                 }
@@ -236,13 +255,13 @@ public class Server {
                 return true;
             } else {
                 // Invalid move - ask player to try again
-                LOGGER.warning("Invalid move attempted by " + color + ": " + move);
+                LOGGER.warning("Server - Invalid move attempted by " + color + ": " + move);
                 players.get(playerIndex).sendInvalidMoveMessage();
                 return handlePlayerTurn(playerIndex, isWhite); // Retry
             }
 
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "Error in player turn for " + (isWhite ? "white" : "black"), e);
+            LOGGER.log(Level.WARNING, "Server - Error in player turn for " + (isWhite ? "white" : "black"), e);
             return false;
         }
     }
@@ -257,32 +276,32 @@ public class Server {
 
             // Validate move
             if (piece == null) {
-                LOGGER.warning("No piece at source position");
+                LOGGER.warning("Server - No piece at source position");
                 return false;
             }
 
             if ((piece.getColor() == 1) != isWhite) {
-                LOGGER.warning("Wrong color piece moved");
+                LOGGER.warning("Server - Wrong color piece moved");
                 return false;
             }
 
             if (!piece.getLegalMoves(gameBoard).contains(toSquare)) {
-                LOGGER.warning("Illegal move for piece");
+                LOGGER.warning("Server - Illegal move for piece");
                 return false;
             }
 
             if (!gameBoard.isKingSafeAfterMove(piece, toSquare)) {
-                LOGGER.warning("Move would put king in check");
+                LOGGER.warning("Server - Move would put king in check");
                 return false;
             }
 
             // Apply move
             gameBoard.commitMove(fromSquare, toSquare, piece);
-            LOGGER.info("Move applied successfully");
+            LOGGER.info("Server - Move applied successfully");
 
             return true;
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "Error validating move", e);
+            LOGGER.log(Level.WARNING, "Server - Error validating move", e);
             return false;
         }
     }
@@ -300,7 +319,7 @@ public class Server {
                     players.get(playerIndex) != null &&
                     players.get(playerIndex).getIsAlive();
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "Error checking player alive status for index " + playerIndex, e);
+            LOGGER.log(Level.WARNING, "Server - Error checking player alive status for index " + playerIndex, e);
             return false;
         }
     }
@@ -310,7 +329,7 @@ public class Server {
     }
 
     private static void broadcastGameState(GameState gameState) {
-        LOGGER.info("Broadcasting game state to all clients");
+        LOGGER.info("Server - Broadcasting game state to all clients");
 
         // Send to all players and spectators
         List<ClientHandler> allClients = new ArrayList<>(players);
@@ -320,7 +339,7 @@ public class Server {
             try {
                 client.sendGameState(gameState);
             } catch (Exception e) {
-                LOGGER.log(Level.WARNING, "Error sending game state to client", e);
+                LOGGER.log(Level.WARNING, "Server - Error sending game state to client", e);
             }
         });
     }
@@ -330,7 +349,7 @@ public class Server {
             return; // Already ending/ended
         }
 
-        LOGGER.info("Ending game");
+        LOGGER.info("Server - Ending game");
         System.out.println("Closing the game :: endGame()");
 
         try {
@@ -343,7 +362,7 @@ public class Server {
                 try {
                     client.close();
                 } catch (Exception e) {
-                    LOGGER.log(Level.WARNING, "Error closing client", e);
+                    LOGGER.log(Level.WARNING, "Server - Error closing client", e);
                 }
             });
 
@@ -353,12 +372,12 @@ public class Server {
                     Thread.sleep(SHUTDOWN_DELAY_MS);
                     closeServerSocket();
                 } catch (Exception e) {
-                    LOGGER.log(Level.WARNING, "Error during server shutdown", e);
+                    LOGGER.log(Level.WARNING, "Server - Error during server shutdown", e);
                 }
             });
 
         } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Error during game end process", e);
+            LOGGER.log(Level.SEVERE, "Server - Error during game end process", e);
         }
     }
 
@@ -366,11 +385,11 @@ public class Server {
         try {
             if (serverSocket != null && !serverSocket.isClosed()) {
                 serverSocket.close();
-                LOGGER.info("Server socket closed");
+                LOGGER.info("Server - Server socket closed");
                 System.out.println("Server socket closed");
             }
         } catch (IOException e) {
-            LOGGER.log(Level.WARNING, "Error closing server socket", e);
+            LOGGER.log(Level.WARNING, "Server - Error closing server socket", e);
         }
     }
 
@@ -383,7 +402,7 @@ public class Server {
     // Broadcasts game state to spectators
     public static void broadcast(GameState gameState) {
         if (gameState == null) {
-            LOGGER.warning("Cannot broadcast null game state");
+            LOGGER.warning("Server - Cannot broadcast null game state");
             return;
         }
 
@@ -397,19 +416,19 @@ public class Server {
                     try {
                         client.sendGameState(gameState);
                     } catch (Exception e) {
-                        LOGGER.log(Level.WARNING, "Error broadcasting to spectator", e);
+                        LOGGER.log(Level.WARNING, "Server - Error broadcasting to spectator", e);
                     }
                 });
 
-                LOGGER.fine("Broadcasted game state to " + spectators.size() + " spectators");
+                LOGGER.fine("Server - Broadcasted game state to " + spectators.size() + " spectators");
             } catch (Exception e) {
-                LOGGER.log(Level.WARNING, "Error during broadcast", e);
+                LOGGER.log(Level.WARNING, "Server - Error during broadcast", e);
             }
         });
     }
 
     private static void cleanup() {
-        LOGGER.info("Server cleanup started");
+        LOGGER.info("Server - Server cleanup started");
 
         try {
             // Clear client lists
@@ -420,9 +439,9 @@ public class Server {
             closeServerSocket();
 
         } catch (Exception e) {
-            LOGGER.log(Level.WARNING, "Error during server cleanup", e);
+            LOGGER.log(Level.WARNING, "Server - Error during server cleanup", e);
         }
 
-        LOGGER.info("Server cleanup completed");
+        LOGGER.info("Server - Server cleanup completed");
     }
 }

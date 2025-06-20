@@ -3,23 +3,31 @@ package clientSide;
 import clientSide.clients.PlayerClient;
 import clientSide.clients.SpectatorClient;
 import clientSide.utils.ServerConnector;
+import startMenu.ClientConnection;
 
 import java.io.*;
 import java.net.Socket;
 import java.util.Scanner;
 
 public class Client {
-    private static Scanner userInputScanner; // Single scanner for user input
-    private static Scanner serverScanner;    // Single scanner for server input
-    private static PrintWriter printWriter;
-    private static ServerConnector serverConnector;
-    private static Socket gameSocket;
-    private static String role;
+    private Scanner userInputScanner; // Single scanner for user input
+    private Scanner serverScanner;    // Single scanner for server input
+    private PrintWriter printWriter;
+    private ServerConnector serverConnector;
+    private Socket gameSocket;
+    private String role;
 
-    public static void main(String[] args) throws IOException {
+    private int SERVER_PORT;
+
+    public Client(int serverPort,String role){
+        SERVER_PORT = serverPort;
+        this.role = role;
+    }
+
+    public void start() throws IOException {
         try{
             System.out.println("Connecting to chess server...");
-            gameSocket = new Socket("localhost", 10000);
+            gameSocket = new Socket("localhost", SERVER_PORT);
             System.out.println("Connected to server successfully!");
         }
         catch (Exception e){
@@ -44,6 +52,7 @@ public class Client {
 
             // assigning the role
             role = assignRole();
+
 
             if (role.equals("player")) {
                 String color = serverScanner.nextLine();
@@ -74,15 +83,17 @@ public class Client {
         }
     }
 
-    private static String assignRole(){
+
+    private String assignRole(){
         System.out.println("Choose your role:");
         System.out.println("- Type 'player' to play the game");
         System.out.println("- Type 'spectator' to watch the game");
-        System.out.print("Your choice: ");
+        System.out.println("Your choice: ");
 
         while (true) {
-            String input = userInputScanner.nextLine().trim().toLowerCase();
-            printWriter.println(input);
+//            String input = userInputScanner.nextLine().trim().toLowerCase();
+
+            printWriter.println(role);
 
             // read server responses
             String informativeMessage;
@@ -98,8 +109,10 @@ public class Client {
             String acknowledgement = serverScanner.nextLine();
 
             if (acknowledgement.equals("ok")) {
-                System.out.println("Successfully connected as " + input);
-                return input;
+                System.out.println("Successfully connected as " + role);
+
+                System.out.println("I am assigneeeed");
+                return role;
             } else {
                 System.out.print("Please try again (player/spectator): ");
             }
@@ -108,7 +121,7 @@ public class Client {
         return "";
     }
 
-    private static void cleanup() {
+    private void cleanup() {
         try {
             if (userInputScanner != null) {
                 userInputScanner.close();

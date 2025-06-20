@@ -24,7 +24,15 @@ public class NetworkGameWindow {
 
         gameWindow = new JFrame("Chess - " + getWindowTitle());
         gameWindow.setLayout(new BorderLayout());
-        gameWindow.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        gameWindow.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE); // Don't exit immediately
+
+        // Add window listener for X button
+        gameWindow.addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent windowEvent) {
+                handleWindowClose();
+            }
+        });
 
         // Create board panel (without PlayerClient for now)
         boardPanel = new NetworkBoardPanel();
@@ -93,10 +101,25 @@ public class NetworkGameWindow {
         }
 
         JButton closeButton = new JButton("Close");
-        closeButton.addActionListener(e -> closeWindow());
+        // FIX: Make close button do the same as X button
+        closeButton.addActionListener(e -> handleWindowClose());
         buttonPanel.add(closeButton);
 
         return buttonPanel;
+    }
+
+    // NEW METHOD: Handle both X button and Close button the same way
+    private void handleWindowClose() {
+        System.out.println("Window close requested (X button or Close button)");
+
+        if (playerClient != null) {
+            // For players: trigger proper shutdown through PlayerClient
+            playerClient.requestShutdown();
+        } else {
+            // For spectators or if no player client: direct shutdown
+            System.out.println("No player client, exiting directly...");
+            System.exit(0);
+        }
     }
 
     private String getWindowTitle() {

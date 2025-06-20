@@ -8,12 +8,13 @@ import java.net.Socket;
 import java.util.Scanner;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-// established communication between server and client for heartbeat
-// checks connection break with server
 public class ServerConnector {
     private Socket heartbeatSocket;
     private AtomicBoolean isConnected = new AtomicBoolean(false);
     private final int HEARTBEAT = 500;
+    private PrintWriter heartbeatPrinter;
+    private Thread heartbeatThread;
+    private Thread listenerThread;
 
     public Socket getHeartbeatSocket() {
         return heartbeatSocket;
@@ -34,24 +35,23 @@ public class ServerConnector {
         catch (IOException e){
             throw new IOException("Error during establishing connection, in connector socket");
         }
-
     }
 
     public void handleHeartbeat() throws IOException {
         OutputStream heartbeatOut = heartbeatSocket.getOutputStream();
-        PrintWriter heartbeatPrinter = new PrintWriter(heartbeatOut, true);
+        heartbeatPrinter = new PrintWriter(heartbeatOut, true);
 
         System.out.println("connect to heartbeat");
 
         // start the heartbeat
-        Thread.startVirtualThread(() -> heartbeatHandler(heartbeatPrinter));
+        heartbeatThread = Thread.startVirtualThread(() -> heartbeatHandler(heartbeatPrinter));
         System.out.println("heartbeat started");
     }
 
     private void heartbeatHandler(PrintWriter heartbeatWriter) {
         while (isConnected.get()){
-            heartbeatWriter.println("HEARTBEAT");
             try {
+                heartbeatWriter.println("HEARTBEAT");
                 Thread.sleep(HEARTBEAT);
             } catch (InterruptedException e) {
                 System.out.println("Heartbeat thread stopping...");
@@ -62,39 +62,94 @@ public class ServerConnector {
                 break;
             }
         }
-        isConnected.set(false);
-        heartbeatWriter.close();
+
+        System.out.println("Heartbeat thread ended");
+
+        // Clean up heartbeat resources
         try {
-            heartbeatSocket.close();
+            if (heartbeatWriter != null) {
+                heartbeatWriter.close();
+            }
+            if (heartbeatSocket != null && !heartbeatSocket.isClosed()) {
+                heartbeatSocket.close();
+            }
+        } catch (IOException e) {
+            System.out.println("Error closing heartbeat resources: " + e.getMessage());
+        }
+    }
+
+    public void serverConnectionListener() {
+        try {
+            InputStream inputStream = heartbeatSocket.getInputStream();
+            Scanner heartbeatScanner = new Scanner(inputStream);
+
+            listenerThread = Thread.startVirtualThread(() -> {
+                System.out.println("started listening about connection");
+                while (isConnected.get()){
+                    try {
+                        if(heartbeatScanner.hasNextLine()){
+                            String message = heartbeatScanner.nextLine();
+                            if(message.equals("GAME_END")){
+                                System.out.println("Game ended-heartbeat");
+                                isConnected.set(false);
+                                break;
+                            }
+                        }
+                        Thread.sleep(1000);
+                    } catch (InterruptedException e) {
+                        System.out.println("Connection listener interrupted");
+                        break;
+                    } catch (Exception e) {
+                        System.out.println("Connection listener error: " + e.getMessage());
+                        break;
+                    }
+                }
+
+                // Clean up scanner
+                try {
+                    heartbeatScanner.close();
+                } catch (Exception e) {
+                    System.out.println("Error closing heartbeat scanner: " + e.getMessage());
+                }
+
+                System.out.println("Connection listener ended");
+            });
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    public void serverConnectionListener() {
-        InputStream inputStream = null;
+    // Add method to properly shutdown the connector
+    public void shutdown() {
+        System.out.println("Shutting down ServerConnector...");
+
+        // Set connected to false to stop threads
+        isConnected.set(false);
+
         try {
-            inputStream = heartbeatSocket.getInputStream();
-            Scanner heartbeatScanner = new Scanner(inputStream);
-            Thread.startVirtualThread(() -> {
-                System.out.println("started listening about connection");
-                while (true){
-                    if(heartbeatScanner.hasNextLine()){
-                        System.out.println("Game ended-heartbeat");
-                        if(heartbeatScanner.nextLine().equals("GAME_END")){
-                            isConnected.set(false);
-                            break;
-                        }
-                    }
-                    try {
-                        Thread.sleep(1000);
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-            });
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+            // Interrupt threads if they exist
+            if (heartbeatThread != null) {
+                heartbeatThread.interrupt();
+            }
+
+            if (listenerThread != null) {
+                listenerThread.interrupt();
+            }
+
+            // Close printer
+            if (heartbeatPrinter != null) {
+                heartbeatPrinter.close();
+            }
+
+            // Close socket
+            if (heartbeatSocket != null && !heartbeatSocket.isClosed()) {
+                heartbeatSocket.close();
+            }
+
+            System.out.println("ServerConnector shutdown complete");
+
+        } catch (Exception e) {
+            System.out.println("Error during ServerConnector shutdown: " + e.getMessage());
         }
     }
 }

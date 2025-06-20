@@ -8,6 +8,8 @@ import chess.view.NetworkGameWindow;
 import javax.swing.*;
 import java.io.PrintWriter;
 import java.util.Scanner;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class PlayerClient {
     private boolean isWhite;
@@ -16,6 +18,8 @@ public class PlayerClient {
     private PrintWriter printWriter;
     private Scanner userInputScanner;
     private NetworkGameWindow gameWindow;
+    private CountDownLatch windowCreatedLatch = new CountDownLatch(1);
+    private AtomicBoolean shutdownRequested = new AtomicBoolean(false);
 
     public PlayerClient(boolean isWhite, ServerConnector serverConnector, Scanner serverScanner,
                         PrintWriter printWriter, Scanner userInputScanner){
@@ -29,25 +33,102 @@ public class PlayerClient {
     }
 
     private void initializeGameWindow() {
-        try {
-            SwingUtilities.invokeAndWait(() -> {
+        SwingUtilities.invokeLater(() -> {
+            try {
                 String colorString = isWhite ? "white" : "black";
                 gameWindow = new NetworkGameWindow("player", colorString);
-                gameWindow.setPlayerClient(this); // Set the player client reference
+                gameWindow.setPlayerClient(this);
+
+                // Set proper close operation - DON'T exit immediately
+                gameWindow.getFrame().setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+
+                // Add window listener for cleanup
+                gameWindow.getFrame().addWindowListener(new java.awt.event.WindowAdapter() {
+                    @Override
+                    public void windowClosing(java.awt.event.WindowEvent windowEvent) {
+                        System.out.println("Game window closing, cleaning up...");
+                        requestShutdown();
+                    }
+                });
+
                 System.out.println("Game window created for " + colorString + " player");
-            });
-        } catch (Exception e) {
-            System.out.println("Error creating game window: " + e.getMessage());
-            e.printStackTrace();
+                windowCreatedLatch.countDown(); // Signal that window is ready
+
+            } catch (Exception e) {
+                System.err.println("Error creating game window: " + e.getMessage());
+                e.printStackTrace();
+                windowCreatedLatch.countDown(); // Signal completion even on error
+            }
+        });
+
+        // Wait for window creation to complete
+        try {
+            windowCreatedLatch.await(); // Wait up to 5 seconds
+            Thread.sleep(100); // Small delay to ensure window is fully rendered
+        } catch (InterruptedException e) {
+            System.err.println("Interrupted while waiting for window creation");
         }
+    }
+
+    public void requestShutdown() {
+        if (shutdownRequested.getAndSet(true)) {
+            return; // Already shutting down
+        }
+
+        System.out.println("Shutdown requested, cleaning up all resources...");
+
+        // Create shutdown thread to handle cleanup
+        Thread shutdownThread = new Thread(() -> {
+            try {
+                // 1. Disconnect from server gracefully
+                if (serverConnector != null) {
+                    serverConnector.getIsConnected().set(false);
+                }
+
+                // 2. Close network resources
+                closeAllResources();
+
+                // 3. Close window on EDT
+                SwingUtilities.invokeLater(() -> {
+                    if (gameWindow != null) {
+                        gameWindow.getFrame().dispose();
+                    }
+                });
+
+                // 4. Force exit after brief delay
+                Thread.sleep(500);
+                System.out.println("Exiting application...");
+                System.exit(0);
+
+            } catch (Exception e) {
+                System.err.println("Error during shutdown: " + e.getMessage());
+                System.exit(1); // Force exit even on error
+            }
+        });
+
+        shutdownThread.setName("Shutdown-Thread");
+        shutdownThread.setDaemon(false); // Ensure it completes before JVM exit
+        shutdownThread.start();
     }
 
     public void runPlayer() {
         System.out.println("You are now a " + (isWhite ? "white" : "black") + " player. Waiting for game to start...");
 
-        while (serverConnector.getIsConnected().get()) {
+        while (serverConnector.getIsConnected().get() && !shutdownRequested.get()) {
             try {
+                // Check if scanner has data available (non-blocking check)
+                if (!serverScanner.hasNextLine()) {
+                    Thread.sleep(100); // Brief pause to prevent busy waiting
+                    continue;
+                }
+
                 String messageFromServer = serverScanner.nextLine();
+
+                // Check for shutdown during processing
+                if (shutdownRequested.get()) {
+                    break;
+                }
+
                 System.out.println("Received from server: " + messageFromServer);
 
                 if (messageFromServer.equals("GAME_STATE_UPDATE")) {
@@ -55,10 +136,10 @@ public class PlayerClient {
                     String gameStateData = serverScanner.nextLine();
                     GameState gameState = deserializeGameState(gameStateData);
 
-                    if (gameWindow != null) {
-                        gameWindow.updateGameState(gameState);
-                    } else {
-                        System.out.println("Warning: gameWindow is null, cannot update game state");
+                    if (gameWindow != null && !shutdownRequested.get()) {
+                        SwingUtilities.invokeLater(() -> {
+                            gameWindow.updateGameState(gameState);
+                        });
                     }
                     System.out.println("Game state updated: " + gameState);
 
@@ -66,22 +147,27 @@ public class PlayerClient {
                     // Server is asking for our move
                     System.out.println("Your turn! Make your move on the board or type 'resign'");
 
-                    // The move will be sent through the GUI when player drags a piece
-                    // or we can handle console input as backup
-
                 } else if (messageFromServer.equals("INVALID_MOVE")) {
                     // Server rejected our move
                     String errorMessage = serverScanner.nextLine();
                     System.out.println("Invalid move: " + errorMessage);
 
-                    gameWindow.showError("Invalid move: " + errorMessage);
+                    if (gameWindow != null && !shutdownRequested.get()) {
+                        SwingUtilities.invokeLater(() -> {
+                            gameWindow.showError("Invalid move: " + errorMessage);
+                        });
+                    }
 
                 } else if (messageFromServer.equals("GAME_END")) {
                     // Game has ended
                     String endMessage = serverScanner.nextLine();
                     System.out.println("Game ended: " + endMessage);
 
-                    gameWindow.showInfo("Game Over: " + endMessage);
+                    if (gameWindow != null && !shutdownRequested.get()) {
+                        SwingUtilities.invokeLater(() -> {
+                            gameWindow.showInfo("Game Over: " + endMessage);
+                        });
+                    }
                     break;
 
                 } else {
@@ -89,16 +175,25 @@ public class PlayerClient {
                     System.out.println("Server: " + messageFromServer);
                 }
             } catch (Exception e) {
-                System.out.println("Connection lost or error occurred: " + e.getMessage());
-                serverConnector.getIsConnected().set(false);
-                closeAllResources();
+                if (!shutdownRequested.get()) {
+                    System.out.println("Connection lost or error occurred: " + e.getMessage());
+                }
                 break;
             }
+        }
+
+        System.out.println("Player client loop ended");
+
+        // If we exit the loop and shutdown wasn't requested, request it now
+        if (!shutdownRequested.get()) {
+            requestShutdown();
         }
     }
 
     // Called by the board panel when player makes a move
     public void sendMoveToServer(ChessMove move) {
+        if (shutdownRequested.get()) return;
+
         try {
             printWriter.println(move.toChessNotation());
             printWriter.flush();
@@ -111,6 +206,8 @@ public class PlayerClient {
 
     // Called by the board panel to send resignation
     public void sendResignation() {
+        if (shutdownRequested.get()) return;
+
         try {
             printWriter.println("resign");
             printWriter.flush();
@@ -125,15 +222,11 @@ public class PlayerClient {
         GameState gameState = new GameState();
 
         try {
-            System.out.println("Deserializing game state data: " + data);
-
             if (data == null || data.trim().isEmpty()) {
-                System.out.println("Empty game state data received");
                 return gameState;
             }
 
-            String[] parts = data.split("\\|", -1); // -1 to keep empty strings
-            System.out.println("Split into " + parts.length + " parts");
+            String[] parts = data.split("\\|", -1);
 
             // Parse board state
             if (parts.length > 0 && !parts[0].isEmpty()) {
@@ -158,7 +251,7 @@ public class PlayerClient {
                 String[] metadata = parts[1].split(";");
                 for (String meta : metadata) {
                     if (meta.contains(":")) {
-                        String[] keyValue = meta.split(":", 2); // Limit to 2 parts
+                        String[] keyValue = meta.split(":", 2);
                         if (keyValue.length >= 2) {
                             String key = keyValue[0].trim();
                             String value = keyValue[1].trim();
@@ -192,8 +285,9 @@ public class PlayerClient {
             }
 
         } catch (Exception e) {
-            System.out.println("Error deserializing game state: " + e.getMessage());
-            e.printStackTrace();
+            if (!shutdownRequested.get()) {
+                System.out.println("Error deserializing game state: " + e.getMessage());
+            }
         }
 
         return gameState;
@@ -208,22 +302,28 @@ public class PlayerClient {
     }
 
     private void closeAllResources(){
+        System.out.println("Closing all client resources...");
+
         try {
-            if (gameWindow != null) {
-                gameWindow.closeWindow();
+            // Close server connector first (this stops heartbeat threads)
+            if (serverConnector != null) {
+                serverConnector.shutdown();
+            }
+
+            // Close network connections
+            if (printWriter != null) {
+                printWriter.close();
             }
 
             if (serverScanner != null) {
                 serverScanner.close();
             }
 
-            if (printWriter != null) {
-                printWriter.close();
-            }
-
             if (userInputScanner != null) {
                 userInputScanner.close();
             }
+
+            System.out.println("All client resources closed");
 
         } catch (Exception e) {
             System.out.println("Error closing resources: " + e.getMessage());
