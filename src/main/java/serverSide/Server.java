@@ -64,6 +64,21 @@ public class Server {
     public void start(){
         LOGGER.info("Server - Starting server on port " + SERVER_PORT);
 
+        // RESET ALL STATIC FLAGS FOR NEW GAME
+        gameFinished.set(false);
+        gameStarted.set(false);
+
+        // Clear any leftover client lists
+        synchronized (players) {
+            players.clear();
+        }
+        synchronized (spectators) {
+            spectators.clear();
+        }
+
+        // Reset game board
+        gameBoard = null;
+
         try {
             initializeServer();
             runServer();
@@ -344,42 +359,92 @@ public class Server {
         });
     }
 
-    public static void endGame() {
-        if (gameFinished.getAndSet(true)) {
-            return; // Already ending/ended
-        }
-
-        LOGGER.info("Server - Ending game");
-        System.out.println("Closing the game :: endGame()");
-
-        try {
-            // Send close message to all clients
-            List<ClientHandler> allClients = new ArrayList<>();
-            allClients.addAll(players);
-            allClients.addAll(spectators);
-
-            allClients.forEach(client -> {
-                try {
-                    client.close();
-                } catch (Exception e) {
-                    LOGGER.log(Level.WARNING, "Server - Error closing client", e);
-                }
-            });
-
-            // Use a separate thread to close the server socket after a brief delay
-            Thread.startVirtualThread(() -> {
-                try {
-                    Thread.sleep(SHUTDOWN_DELAY_MS);
-                    closeServerSocket();
-                } catch (Exception e) {
-                    LOGGER.log(Level.WARNING, "Server - Error during server shutdown", e);
-                }
-            });
-
-        } catch (Exception e) {
-            LOGGER.log(Level.SEVERE, "Server - Error during game end process", e);
-        }
+//    public static void endGame() {
+//        if (gameFinished.getAndSet(true)) {
+//            return; // Already ending/ended
+//        }
+//
+//        LOGGER.info("Server - Ending game");
+//        System.out.println("Closing the game :: endGame()");
+//
+//        try {
+//            // Send close message to all clients
+//            List<ClientHandler> allClients = new ArrayList<>();
+//            allClients.addAll(players);
+//            allClients.addAll(spectators);
+//
+//            allClients.forEach(client -> {
+//                try {
+//                    client.close();
+//                } catch (Exception e) {
+//                    LOGGER.log(Level.WARNING, "Server - Error closing client", e);
+//                }
+//            });
+//
+//            // Close server socket immediately (don't wait)
+//            closeServerSocket();
+//
+//            // Clear client lists
+//            players.clear();
+//            spectators.clear();
+//
+//            // Reset game state
+//            gameBoard = null;
+//            gameStarted.set(false);
+//
+//        } catch (Exception e) {
+//            LOGGER.log(Level.SEVERE, "Server - Error during game end process", e);
+//        }
+//
+//        System.out.println("Server shutdown completed");
+//    }
+public static void endGame() {
+    if (gameFinished.getAndSet(true)) {
+        return; // Already ending/ended
     }
+
+    LOGGER.info("Server - Ending game");
+    System.out.println("Closing the game :: endGame()");
+
+    try {
+        // Send close message to all clients
+        List<ClientHandler> allClients = new ArrayList<>();
+        synchronized (players) {
+            allClients.addAll(players);
+        }
+        synchronized (spectators) {
+            allClients.addAll(spectators);
+        }
+
+        allClients.forEach(client -> {
+            try {
+                client.close();
+            } catch (Exception e) {
+                LOGGER.log(Level.WARNING, "Server - Error closing client", e);
+            }
+        });
+
+        // Close server socket immediately
+        closeServerSocket();
+
+        // Clear client lists
+        synchronized (players) {
+            players.clear();
+        }
+        synchronized (spectators) {
+            spectators.clear();
+        }
+
+        // Reset game state
+        gameBoard = null;
+        gameStarted.set(false);
+
+    } catch (Exception e) {
+        LOGGER.log(Level.SEVERE, "Server - Error during game end process", e);
+    }
+
+    System.out.println("Server shutdown completed");
+}
 
     private static void closeServerSocket() {
         try {

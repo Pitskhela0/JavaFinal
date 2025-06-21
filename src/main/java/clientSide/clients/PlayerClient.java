@@ -4,6 +4,7 @@ import clientSide.utils.ServerConnector;
 import shared.GameState;
 import shared.ChessMove;
 import chess.view.NetworkGameWindow;
+import startMenu.ClientConnection;
 
 import javax.swing.*;
 import java.io.PrintWriter;
@@ -20,14 +21,16 @@ public class PlayerClient {
     private NetworkGameWindow gameWindow;
     private CountDownLatch windowCreatedLatch = new CountDownLatch(1);
     private AtomicBoolean shutdownRequested = new AtomicBoolean(false);
+    private ClientConnection clientConnection;
 
     public PlayerClient(boolean isWhite, ServerConnector serverConnector, Scanner serverScanner,
-                        PrintWriter printWriter, Scanner userInputScanner){
+                        PrintWriter printWriter, Scanner userInputScanner, ClientConnection clientConnection){
         this.isWhite = isWhite;
         this.serverConnector = serverConnector;
         this.serverScanner = serverScanner;
         this.printWriter = printWriter;
         this.userInputScanner = userInputScanner;
+        this.clientConnection = clientConnection;
 
         initializeGameWindow();
     }
@@ -98,8 +101,10 @@ public class PlayerClient {
                 // 4. Force exit after brief delay
                 Thread.sleep(500);
                 System.out.println("Exiting application...");
-                System.exit(0);
+//                System.exit(0);
 
+                // reshow the start menu
+                clientConnection.showStartMenu();
             } catch (Exception e) {
                 System.err.println("Error during shutdown: " + e.getMessage());
                 System.exit(1); // Force exit even on error

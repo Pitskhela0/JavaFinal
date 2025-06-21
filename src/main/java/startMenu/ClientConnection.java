@@ -1,6 +1,5 @@
 package startMenu;
 
-
 import clientSide.Client;
 import serverSide.Server;
 import startMenu.menuStyling.MenuStyles;
@@ -17,14 +16,22 @@ public class ClientConnection extends JFrame{
     private String email;
     private JTextField joiningIDField;
     private JTextField spectatingIDField;
-    
+
+    // Track server thread to properly shut it down
+    private Thread currentServerThread;
+    private Server currentServer;
+
     public ClientConnection(){
 
     }
 
-
-    private boolean hosting = false;
-
+    public void showStartMenu() {
+        SwingUtilities.invokeLater(() -> {
+            setVisible(true);
+            toFront(); // Bring window to front
+            requestFocus(); // Give it focus
+        });
+    }
 
     public void start(){
         // main menu logic
@@ -66,28 +73,39 @@ public class ClientConnection extends JFrame{
         setVisible(true);
     }
 
-
-
     public void hostGame() throws IOException {
-        // Hide the menu window first
+        // Stop any existing server first
+        stopCurrentServer();
+
+        // Hide the menu window
         setVisible(false);
 
         // Start server in background thread
-        Server server = new Server(10000, 0);
-        Thread serverThread = new Thread(() -> {
+        currentServer = new Server(10000, 0);
+        currentServerThread = new Thread(() -> {
             try {
-                server.start();
+                System.out.println("Starting new server thread...");
+                currentServer.start();
             } catch (Exception e) {
                 System.err.println("Server error: " + e.getMessage());
                 e.printStackTrace();
             }
         });
-        serverThread.setDaemon(true); // Make it daemon so it doesn't prevent app exit
-        serverThread.start();
+        currentServerThread.setName("Chess-Server-Thread");
+        currentServerThread.setDaemon(true);
+        currentServerThread.start();
 
-        // Wait for server to start
+        // Wait longer for server to start and add verification
         try {
-            Thread.sleep(2000);
+            Thread.sleep(3000); // Increased wait time
+
+            // Verify server is actually running by checking thread state
+            if (!currentServerThread.isAlive()) {
+                throw new RuntimeException("Server thread died during startup");
+            }
+
+            System.out.println("Server should be ready, starting client...");
+
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
@@ -95,14 +113,68 @@ public class ClientConnection extends JFrame{
         // Start client in background thread (not on EDT)
         Thread clientThread = new Thread(() -> {
             try {
-                Client client = new Client(10000, "player");
+                // Add small additional delay
+                Thread.sleep(500);
+                Client client = new Client(10000, "player", this);
                 client.start();
             } catch (Exception e) {
                 System.err.println("Client error: " + e.getMessage());
                 e.printStackTrace();
+
+                // If client fails, show start menu again
+                SwingUtilities.invokeLater(() -> {
+                    showStartMenu();
+                });
             }
         });
+        clientThread.setName("Chess-Client-Thread");
         clientThread.start();
+    }
+
+    // Method to properly stop the current server
+    private void stopCurrentServer() {
+        System.out.println("Stopping current server if running...");
+
+        if (currentServerThread != null && currentServerThread.isAlive()) {
+            System.out.println("Interrupting existing server thread...");
+
+            // Force end the current game to close server
+            if (currentServer != null) {
+                try {
+                    // Call endGame to close server socket
+                    Server.endGame();
+                    Thread.sleep(1000); // Wait for cleanup
+                } catch (Exception e) {
+                    System.err.println("Error stopping server: " + e.getMessage());
+                }
+            }
+
+            // Interrupt the thread
+            currentServerThread.interrupt();
+
+            // Wait for thread to die
+            try {
+                currentServerThread.join(3000); // Wait up to 3 seconds
+                if (currentServerThread.isAlive()) {
+                    System.err.println("Warning: Server thread did not stop gracefully");
+                } else {
+                    System.out.println("Server thread stopped successfully");
+                }
+            } catch (InterruptedException e) {
+                System.err.println("Interrupted while waiting for server thread to stop");
+            }
+        }
+
+        // Clear references
+        currentServerThread = null;
+        currentServer = null;
+
+        // Additional cleanup - wait a bit more for port to be released
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            // Ignore
+        }
     }
 
     public void joinGame(JTextField gameID){
@@ -118,8 +190,15 @@ public class ClientConnection extends JFrame{
         // retrieve game from db, run auto-game
     }
 
+    // Override window closing to clean up server
+    @Override
+    public void dispose() {
+        stopCurrentServer();
+        super.dispose();
+    }
+
     private Result getResult() {
-        setTitle("Start Menu");
+        setTitle("Chess Game - Start Menu");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setSize(600, 400);
         setLocationRelativeTo(null);
@@ -135,7 +214,6 @@ public class ClientConnection extends JFrame{
         JButton spectateGameButton = new JButton("Spectate Game");
         JButton watchGameFromDBButton = new JButton("Review Played Game");
 
-
         MenuStyles.styleButton(hostGameButton);
         MenuStyles.styleButton(joinGameButton);
         MenuStyles.styleButton(spectateGameButton);
@@ -148,7 +226,6 @@ public class ClientConnection extends JFrame{
         gbc.insets = new Insets(10, 10, 10, 10);
 
         // Host Game button
-
         gbc.gridx = 0;
         gbc.gridy = 1;
         gbc.gridwidth = 2;
@@ -174,7 +251,6 @@ public class ClientConnection extends JFrame{
         // spectate game field for game id
         gbc.gridx = 1;
         panel.add(spectatingIDField,gbc);
-
 
         String[] gameList = { "Game #101", "Game #102", "Game #103" };
         JComboBox<String> gameDropdown = new JComboBox<>(gameList);

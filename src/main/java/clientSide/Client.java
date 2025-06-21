@@ -19,21 +19,25 @@ public class Client {
 
     private int SERVER_PORT;
 
-    public Client(int serverPort,String role){
+    private ClientConnection clientConnection;
+
+    public Client(int serverPort,String role, ClientConnection clientConnection){
         SERVER_PORT = serverPort;
         this.role = role;
+        this.clientConnection = clientConnection;
     }
 
     public void start() throws IOException {
-        try{
+//        try{
             System.out.println("Connecting to chess server...");
             gameSocket = new Socket("localhost", SERVER_PORT);
             System.out.println("Connected to server successfully!");
-        }
-        catch (Exception e){
-            System.out.println("Cannot connect to server. Make sure the server is running on localhost:10000");
-            return;
-        }
+//        }
+//        catch (Exception e){
+//
+//            System.out.println("Cannot connect to server. Make sure the server is running on localhost:10000");
+//            return;
+//        }
 
         try {
             serverConnector = new ServerConnector(gameSocket);
@@ -58,12 +62,13 @@ public class Client {
                 String color = serverScanner.nextLine();
                 if(color.equals("white")){
                     System.out.println("You are assigned as White player");
-                    PlayerClient whitePlayer = new PlayerClient(true, serverConnector, serverScanner, printWriter, userInputScanner);
+                    PlayerClient whitePlayer = new PlayerClient(true, serverConnector, serverScanner, printWriter, userInputScanner, clientConnection
+                    );
                     whitePlayer.runPlayer();
                 }
                 else {
                     System.out.println("You are assigned as Black player");
-                    PlayerClient blackPlayer = new PlayerClient(false, serverConnector, serverScanner, printWriter, userInputScanner);
+                    PlayerClient blackPlayer = new PlayerClient(false, serverConnector, serverScanner, printWriter, userInputScanner, clientConnection);
                     blackPlayer.runPlayer();
                 }
             } else if(role.equals("spectator")){
@@ -85,10 +90,10 @@ public class Client {
 
 
     private String assignRole(){
-        System.out.println("Choose your role:");
-        System.out.println("- Type 'player' to play the game");
-        System.out.println("- Type 'spectator' to watch the game");
-        System.out.println("Your choice: ");
+//        System.out.println("Choose your role:");
+//        System.out.println("- Type 'player' to play the game");
+//        System.out.println("- Type 'spectator' to watch the game");
+//        System.out.println("Your choice: ");
 
         while (true) {
 //            String input = userInputScanner.nextLine().trim().toLowerCase();
