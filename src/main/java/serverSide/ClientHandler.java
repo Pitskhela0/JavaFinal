@@ -31,10 +31,13 @@ public class ClientHandler {
     }
     private final Scanner heartbeatScanner;
 
-    public ClientHandler(Socket socket, Socket heartbeatSocket) {
+    private Server server;
+
+    public ClientHandler(Socket socket, Socket heartbeatSocket, Server server) {
         InputStream inputStream1;
         this.heartbeatSocket = heartbeatSocket;
         this.moveSocket = socket;
+        this.server = server;
         InputStream inputStream;
         OutputStream outputStream;
         try {
@@ -103,10 +106,10 @@ public class ClientHandler {
         isAlive = false;
 
         if(isPlayer){
-            Server.endGame();
+            server.endGame();
         }
         else {
-            Server.kickoutSpectator();
+            server.kickoutSpectator();
         }
     }
 
@@ -114,7 +117,7 @@ public class ClientHandler {
         LOGGER.info("Server - Starting role assignment");
         while (!assigned && moveSocket.isConnected()) {
             try {
-                System.out.println("Current players: " + Server.getPlayers().size());
+                System.out.println("Current players: " + server.getPlayers().size());
 
                 if (!scanner.hasNextLine()) {
                     break; // Client disconnected
@@ -125,7 +128,7 @@ public class ClientHandler {
                 LOGGER.info("Server - Role request: " + userInput);
 
                 if (userInput.equals("player")) {
-                    if (Server.getPlayers().size() >= 2) {
+                    if (server.getPlayers().size() >= 2) {
                         // informative message
                         printWriter.println("There are already 2 players");
                         // acknowledgement
@@ -152,9 +155,9 @@ public class ClientHandler {
                     printWriter.println("ok");
                     printWriter.flush();
 
-                    if(Server.isGameStarted()){
+                    if(server.isGameStarted()){
                         // mid game spectator - send current game state
-                        GameState currentState = new GameState(Server.getBoard());
+                        GameState currentState = new GameState(server.getBoard());
                         sendGameState(currentState);
                     }
                 } else {
@@ -173,12 +176,12 @@ public class ClientHandler {
 
         if (assigned) {
             if (isPlayer) {
-                synchronized (Server.getPlayers()) {
-                    Server.getPlayers().add(this);
-                    System.out.println("Total players: " + Server.getPlayers().size());
-                    LOGGER.info("Server - Total players: " + Server.getPlayers().size());
+                synchronized (server.getPlayers()) {
+                    server.getPlayers().add(this);
+                    System.out.println("Total players: " + server.getPlayers().size());
+                    LOGGER.info("Server - Total players: " + server.getPlayers().size());
 
-                    if (Server.getPlayers().size() == 1) {
+                    if (server.getPlayers().size() == 1) {
                         isWhitePlayer = true;
                         printWriter.println("white");
                         printWriter.flush();
@@ -194,15 +197,15 @@ public class ClientHandler {
                 }
 
                 // Check if game should start
-                if (!Server.isGameStarted() && Server.getPlayers().size() == 2) {
-                    Server.setGameStarted(true);
-                    new Thread(Server::startGame).start();
+                if (!server.isGameStarted() && server.getPlayers().size() == 2) {
+                    server.setGameStarted(true);
+                    new Thread(() -> server.startGame()).start();
                 }
             } else {
-                synchronized (Server.getSpectators()) {
-                    Server.getSpectators().add(this);
-                    System.out.println("Total spectators: " + Server.getSpectators().size());
-                    LOGGER.info("Server - Total spectators: " + Server.getSpectators().size());
+                synchronized (server.getSpectators()) {
+                    server.getSpectators().add(this);
+                    System.out.println("Total spectators: " + server.getSpectators().size());
+                    LOGGER.info("Server - Total spectators: " + server.getSpectators().size());
                 }
             }
         } else {

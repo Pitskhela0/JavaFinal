@@ -20,49 +20,47 @@ import java.util.logging.Level;
 
 public class Server {
     private static final Logger LOGGER = Logger.getLogger(Server.class.getName());
-    private static int SERVER_PORT;
+    private int SERVER_PORT;
     private int GAME_ID;
-    private static final int SHUTDOWN_DELAY_MS = 500;
-    private static final String COLOR_WHITE = "white";
-    private static final String COLOR_BLACK = "black";
-    private static final String HEARTBEAT_PORT_PREFIX = "HEARTBEAT_PORT:";
+    private final int SHUTDOWN_DELAY_MS = 500;
+    private final String COLOR_WHITE = "white";
+    private final String COLOR_BLACK = "black";
+    private final String HEARTBEAT_PORT_PREFIX = "HEARTBEAT_PORT:";
 
-    private static List<ClientHandler> spectators = Collections.synchronizedList(new ArrayList<>());
-    private static final List<ClientHandler> players = Collections.synchronizedList(new ArrayList<>());
-    private static BoardState gameBoard; // Server maintains authoritative game state
+    private List<ClientHandler> spectators = Collections.synchronizedList(new ArrayList<>());
+    private final List<ClientHandler> players = Collections.synchronizedList(new ArrayList<>());
+    private BoardState gameBoard; // Server maintains authoritative game state
 
-    private static final AtomicBoolean gameFinished = new AtomicBoolean(false);
-    private static final AtomicBoolean gameStarted = new AtomicBoolean(false);
-    private static ServerSocket serverSocket;
+    private final AtomicBoolean gameFinished = new AtomicBoolean(false);
+    private final AtomicBoolean gameStarted = new AtomicBoolean(false);
+    private ServerSocket serverSocket;
 
-    public Server(int port, int gameID){
-        SERVER_PORT = port;
+    public Server(int gameID){
         GAME_ID = gameID;
     }
 
-    public static BoardState getBoard() {
+    public BoardState getBoard() {
         return gameBoard;
     }
 
-    public static void setGameStarted(boolean started) {
+    public void setGameStarted(boolean started) {
         gameStarted.set(started);
         LOGGER.info("Server - Game started status changed to: " + started);
     }
 
-    public static boolean isGameStarted() {
+    public boolean isGameStarted() {
         return gameStarted.get();
     }
 
-    public static List<ClientHandler> getSpectators() {
+    public List<ClientHandler> getSpectators() {
         return spectators;
     }
 
-    public static List<ClientHandler> getPlayers() {
+    public List<ClientHandler> getPlayers() {
         return players;
     }
 
     public void start(){
-        LOGGER.info("Server - Starting server on port " + SERVER_PORT);
 
         // RESET ALL STATIC FLAGS FOR NEW GAME
         gameFinished.set(false);
@@ -81,6 +79,8 @@ public class Server {
 
         try {
             initializeServer();
+            LOGGER.info("Server - Starting server on port " + SERVER_PORT);
+
             runServer();
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Server - Fatal server error", e);
@@ -102,10 +102,13 @@ public class Server {
 //        }
 //    }
 
-    private static void initializeServer() throws IOException {
+    private void initializeServer() throws IOException {
         try {
             if (!gameFinished.get()) {
-                serverSocket = new ServerSocket(SERVER_PORT);
+                // there is no need to wait for available port for out app right now, since many users will not connect
+//                serverSocket = new ServerSocket(0); // finds free available port in OS
+                serverSocket = new ServerSocket(10000);
+                SERVER_PORT = serverSocket.getLocalPort();
                 LOGGER.info("Server - Server socket created successfully on port " + SERVER_PORT);
             }
         } catch (IOException e) {
@@ -114,7 +117,11 @@ public class Server {
         }
     }
 
-    private static void runServer() {
+    public int getPort(){
+        return SERVER_PORT;
+    }
+
+    private void runServer() {
         while (!gameFinished.get()) {
             try {
                 LOGGER.info("Server - Waiting for client connections...");
@@ -132,7 +139,7 @@ public class Server {
         }
     }
 
-    private static void handleNewClient(Socket socket) {
+    private void handleNewClient(Socket socket) {
         try {
             // Create heartbeat server socket
             ServerSocket heartbeatServerSocket = new ServerSocket(0); // 0 means OS will find available random port
@@ -151,7 +158,7 @@ public class Server {
             System.out.println("Current players: " + players.size());
 
             // Create client handler
-            ClientHandler clientHandler = new ClientHandler(socket, heartbeatSocket);
+            ClientHandler clientHandler = new ClientHandler(socket, heartbeatSocket, this);
 
             // Start handling client in separate thread
             Thread.startVirtualThread(clientHandler::handleClient);
@@ -171,7 +178,7 @@ public class Server {
         }
     }
 
-    static void startGame() {
+    public void startGame() {
         LOGGER.info("Server - Starting game with 2 players");
         gameStarted.set(true);
 
@@ -221,7 +228,7 @@ public class Server {
         endGame();
     }
 
-    private static boolean handlePlayerTurn(int playerIndex, boolean isWhite) {
+    private boolean handlePlayerTurn(int playerIndex, boolean isWhite) {
         try {
             String color = isWhite ? COLOR_WHITE : COLOR_BLACK;
             LOGGER.info("Server - Requesting move from " + color + " player");
@@ -281,7 +288,7 @@ public class Server {
         }
     }
 
-    private static boolean validateAndApplyMove(ChessMove move, boolean isWhite) {
+    private boolean validateAndApplyMove(ChessMove move, boolean isWhite) {
         try {
             Square[][] board = gameBoard.getSquareArray();
             Square fromSquare = board[move.getFromRow()][move.getFromCol()];
@@ -321,13 +328,13 @@ public class Server {
         }
     }
 
-    private static boolean bothPlayersAlive() {
+    private boolean bothPlayersAlive() {
         return players.size() >= 2 &&
                 players.get(0).getIsAlive() &&
                 players.get(1).getIsAlive();
     }
 
-    private static boolean isPlayerAlive(int playerIndex) {
+    private boolean isPlayerAlive(int playerIndex) {
         try {
             return playerIndex >= 0 &&
                     playerIndex < players.size() &&
@@ -339,11 +346,11 @@ public class Server {
         }
     }
 
-    private static boolean isGameFinished() {
+    private boolean isGameFinished() {
         return gameFinished.get() || gameBoard == null || !bothPlayersAlive();
     }
 
-    private static void broadcastGameState(GameState gameState) {
+    private void broadcastGameState(GameState gameState) {
         LOGGER.info("Server - Broadcasting game state to all clients");
 
         // Send to all players and spectators
@@ -398,7 +405,7 @@ public class Server {
 //
 //        System.out.println("Server shutdown completed");
 //    }
-public static void endGame() {
+public void endGame() {
     if (gameFinished.getAndSet(true)) {
         return; // Already ending/ended
     }
@@ -446,7 +453,7 @@ public static void endGame() {
     System.out.println("Server shutdown completed");
 }
 
-    private static void closeServerSocket() {
+    private void closeServerSocket() {
         try {
             if (serverSocket != null && !serverSocket.isClosed()) {
                 serverSocket.close();
@@ -458,14 +465,14 @@ public static void endGame() {
         }
     }
 
-    public static void kickoutSpectator(){
+    public void kickoutSpectator(){
         spectators = spectators.stream()
                 .filter(ClientHandler::getIsAlive)
                 .collect(Collectors.toList());
     }
 
     // Broadcasts game state to spectators
-    public static void broadcast(GameState gameState) {
+    public void broadcast(GameState gameState) {
         if (gameState == null) {
             LOGGER.warning("Server - Cannot broadcast null game state");
             return;
@@ -492,7 +499,7 @@ public static void endGame() {
         });
     }
 
-    private static void cleanup() {
+    private void cleanup() {
         LOGGER.info("Server - Server cleanup started");
 
         try {

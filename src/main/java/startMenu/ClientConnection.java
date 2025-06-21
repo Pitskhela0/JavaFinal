@@ -1,14 +1,15 @@
 package startMenu;
 
-import clientSide.Client;
 import serverSide.Server;
+import startMenu.buttonFunctions.HostGameButton;
+import startMenu.buttonFunctions.JoinGamePlayerButton;
+import startMenu.buttonFunctions.SpectateGameButton;
 import startMenu.menuStyling.MenuStyles;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.io.IOException;
 
 public class ClientConnection extends JFrame{
     private int clientID;
@@ -20,6 +21,8 @@ public class ClientConnection extends JFrame{
     // Track server thread to properly shut it down
     private Thread currentServerThread;
     private Server currentServer;
+
+    private int GAME_ID;
 
     public ClientConnection(){
 
@@ -41,149 +44,35 @@ public class ClientConnection extends JFrame{
         result.hostGameButton().addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                try {
-                    hostGame();
-                } catch (IOException ex) {
-                    throw new RuntimeException(ex);
-                }
+                hostGame();
             }
         });
 
-        result.joinGameButton().addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                joinGame(joiningIDField);
-            }
-        });
+        result.joinGameButton().addActionListener(e -> joinGame(joiningIDField));
 
-        result.spectateGameButton().addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                spectateGame(spectatingIDField);
-            }
-        });
+        result.spectateGameButton().addActionListener(e -> spectateGame(spectatingIDField));
 
-        result.watchGameFromDBButton().addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                watchGameFromDB();
-            }
-        });
+        result.watchGameFromDBButton().addActionListener(e -> watchGameFromDB());
 
         setVisible(true);
     }
 
-    public void hostGame() throws IOException {
-        // Stop any existing server first
-        stopCurrentServer();
-
-        // Hide the menu window
-        setVisible(false);
-
-        // Start server in background thread
-        currentServer = new Server(10000, 0);
-        currentServerThread = new Thread(() -> {
-            try {
-                System.out.println("Starting new server thread...");
-                currentServer.start();
-            } catch (Exception e) {
-                System.err.println("Server error: " + e.getMessage());
-                e.printStackTrace();
-            }
-        });
-        currentServerThread.setName("Chess-Server-Thread");
-        currentServerThread.setDaemon(true);
-        currentServerThread.start();
-
-        // Wait longer for server to start and add verification
-        try {
-            Thread.sleep(3000); // Increased wait time
-
-            // Verify server is actually running by checking thread state
-            if (!currentServerThread.isAlive()) {
-                throw new RuntimeException("Server thread died during startup");
-            }
-
-            System.out.println("Server should be ready, starting client...");
-
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-
-        // Start client in background thread (not on EDT)
-        Thread clientThread = new Thread(() -> {
-            try {
-                // Add small additional delay
-                Thread.sleep(500);
-                Client client = new Client(10000, "player", this);
-                client.start();
-            } catch (Exception e) {
-                System.err.println("Client error: " + e.getMessage());
-                e.printStackTrace();
-
-                // If client fails, show start menu again
-                SwingUtilities.invokeLater(() -> {
-                    showStartMenu();
-                });
-            }
-        });
-        clientThread.setName("Chess-Client-Thread");
-        clientThread.start();
+    public void hostGame(){
+        HostGameButton game = new HostGameButton(this);
+        GAME_ID = game.getGAME_ID();
+        game.hostGame();
     }
 
-    // Method to properly stop the current server
-    private void stopCurrentServer() {
-        System.out.println("Stopping current server if running...");
-
-        if (currentServerThread != null && currentServerThread.isAlive()) {
-            System.out.println("Interrupting existing server thread...");
-
-            // Force end the current game to close server
-            if (currentServer != null) {
-                try {
-                    // Call endGame to close server socket
-                    Server.endGame();
-                    Thread.sleep(1000); // Wait for cleanup
-                } catch (Exception e) {
-                    System.err.println("Error stopping server: " + e.getMessage());
-                }
-            }
-
-            // Interrupt the thread
-            currentServerThread.interrupt();
-
-            // Wait for thread to die
-            try {
-                currentServerThread.join(3000); // Wait up to 3 seconds
-                if (currentServerThread.isAlive()) {
-                    System.err.println("Warning: Server thread did not stop gracefully");
-                } else {
-                    System.out.println("Server thread stopped successfully");
-                }
-            } catch (InterruptedException e) {
-                System.err.println("Interrupted while waiting for server thread to stop");
-            }
-        }
-
-        // Clear references
-        currentServerThread = null;
-        currentServer = null;
-
-        // Additional cleanup - wait a bit more for port to be released
-        try {
-            Thread.sleep(500);
-        } catch (InterruptedException e) {
-            // Ignore
-        }
-    }
-
-    public void joinGame(JTextField gameID){
+    public void joinGame(JTextField gameIDText){
         // find server with entered gameID and connect to its port as client
-
+        JoinGamePlayerButton blackPlayerHandler = new JoinGamePlayerButton(this,gameIDText);
+        blackPlayerHandler.joinGame();
     }
 
     public void spectateGame(JTextField gameID){
         // find server with entered gameID and connect to its port as spectator
+        SpectateGameButton spectator = new SpectateGameButton(this, gameID);
+        spectator.spectate();
     }
 
     public void watchGameFromDB(){
@@ -270,5 +159,50 @@ public class ClientConnection extends JFrame{
 
     private record Result(JButton hostGameButton, JButton joinGameButton,
                           JButton spectateGameButton, JButton watchGameFromDBButton) {
+    }
+    // Method to properly stop the current server
+    public void stopCurrentServer() {
+        System.out.println("Stopping current server if running...");
+
+        if (currentServerThread != null && currentServerThread.isAlive()) {
+            System.out.println("Interrupting existing server thread...");
+
+            // Force end the current game to close server
+            if (currentServer != null) {
+                try {
+                    // Call endGame to close server socket
+                    currentServer.endGame();
+                    Thread.sleep(1000); // Wait for cleanup
+                } catch (Exception e) {
+                    System.err.println("Error stopping server: " + e.getMessage());
+                }
+            }
+
+            // Interrupt the thread
+            currentServerThread.interrupt();
+
+            // Wait for thread to die
+            try {
+                currentServerThread.join(3000); // Wait up to 3 seconds
+                if (currentServerThread.isAlive()) {
+                    System.err.println("Warning: Server thread did not stop gracefully");
+                } else {
+                    System.out.println("Server thread stopped successfully");
+                }
+            } catch (InterruptedException e) {
+                System.err.println("Interrupted while waiting for server thread to stop");
+            }
+        }
+
+        // Clear references
+        currentServerThread = null;
+        currentServer = null;
+
+        // Additional cleanup - wait a bit more for port to be released
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            // Ignore
+        }
     }
 }
