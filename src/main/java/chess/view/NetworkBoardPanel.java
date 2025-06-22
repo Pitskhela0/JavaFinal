@@ -167,7 +167,7 @@ public class NetworkBoardPanel extends JPanel implements MouseListener, MouseMot
         if (!dragging) return;
 
         SquarePanel targetPanel = getSquarePanelAt(e.getX(), e.getY());
-        boolean validMove = false;
+        boolean moveAttempted = false;
 
         if (targetPanel != null) {
             int targetRow = targetPanel.getRow();
@@ -178,17 +178,21 @@ public class NetworkBoardPanel extends JPanel implements MouseListener, MouseMot
                 // Create and send move
                 ChessMove move = new ChessMove(sourceRow, sourceCol, targetRow, targetCol);
                 playerClient.sendMoveToServer(move);
-                validMove = true;
+                moveAttempted = true;
             }
         }
 
-        // Reset dragging state
-        if (!validMove && sourceRow >= 0 && sourceCol >= 0) {
-            // Return piece to original position
+        // restore the piece display when move was not valid
+        if (sourceRow >= 0 && sourceCol >= 0) {
             squarePanels[sourceRow][sourceCol].setDisplayPiece(true);
+        }
+
+        // Shake window only for invalid drops (not same square)
+        if (!moveAttempted && targetPanel == null) {
             shakeWindow();
         }
 
+        // Reset dragging state
         dragging = false;
         ghostActive = false;
         sourceRow = -1;
@@ -292,13 +296,6 @@ public class NetworkBoardPanel extends JPanel implements MouseListener, MouseMot
                 if (pieceImage != null) {
                     g.drawImage(pieceImage, 0, 0, getWidth(), getHeight(), this);
                 }
-            }
-
-            // Draw coordinate labels for debugging (optional)
-            if (false) { // Set to true for debugging
-                g.setColor(Color.BLACK);
-                g.setFont(new Font("Arial", Font.PLAIN, 10));
-                g.drawString(row + "," + col, 2, 12);
             }
         }
     }

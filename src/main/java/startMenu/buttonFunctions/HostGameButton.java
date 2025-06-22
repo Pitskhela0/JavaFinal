@@ -5,7 +5,6 @@ import serverSide.Server;
 import startMenu.ClientConnection;
 
 import javax.swing.*;
-import java.util.Collections;
 
 public class HostGameButton {
     private Thread currentServerThread;
@@ -45,6 +44,11 @@ public class HostGameButton {
             } catch (Exception e) {
                 System.err.println("Server error: " + e.getMessage());
                 e.printStackTrace();
+            }
+            finally {
+                SwingUtilities.invokeLater(() -> {
+                    clientConnection.showStartMenu();
+                });
             }
         });
         currentServerThread.setName("Chess-Server-Thread");

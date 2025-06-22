@@ -34,6 +34,11 @@ public class JoinGamePlayerButton {
                         clientConnection.showStartMenu();
                     });
                 }
+                finally {
+                    SwingUtilities.invokeLater(() -> {
+                        clientConnection.showStartMenu();
+                    });
+                }
             });
             blackPlayer.setName("Chess-Client-Thread");
             blackPlayer.start();

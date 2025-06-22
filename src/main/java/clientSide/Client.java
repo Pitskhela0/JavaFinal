@@ -96,39 +96,30 @@ public class Client {
 
 
     private String assignRole(){
-//        System.out.println("Choose your role:");
-//        System.out.println("- Type 'player' to play the game");
-//        System.out.println("- Type 'spectator' to watch the game");
-//        System.out.println("Your choice: ");
+        printWriter.println(role);
 
-        while (true) {
-//            String input = userInputScanner.nextLine().trim().toLowerCase();
-
-            printWriter.println(role);
-
-            // read server responses
-            String informativeMessage;
-            try{
-                informativeMessage = serverScanner.nextLine();
-                System.out.println("Server: " + informativeMessage);
-            }
-            catch (Exception e){
-                System.out.println("You cannot connect to server, it is closed");
-                break;
-            }
-
-            String acknowledgement = serverScanner.nextLine();
-
-            if (acknowledgement.equals("ok")) {
-                System.out.println("Successfully connected as " + role);
-
-                System.out.println("I am assigneeeed");
-                return role;
-            } else {
-                System.out.print("Please try again (player/spectator): ");
-            }
-            // if not ok, continue the loop to try again
+        // read server responses
+        String informativeMessage;
+        try{
+            informativeMessage = serverScanner.nextLine();
+            System.out.println("Server: " + informativeMessage);
         }
+        catch (Exception e){
+            System.out.println("You cannot connect to server, it is closed");
+            throw new RuntimeException();
+        }
+
+        String acknowledgement = serverScanner.nextLine();
+
+        if (acknowledgement.equals("ok")) {
+            System.out.println("Successfully connected as " + role);
+
+            System.out.println("I am assigneeeed");
+            return role;
+        } else {
+            System.out.print("Please try again (player/spectator): ");
+        }
+
         return "";
     }
 

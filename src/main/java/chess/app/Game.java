@@ -1,7 +1,6 @@
 package chess.app;
 
 import chess.view.GameWindow;
-import chess.view.StartMenu;
 
 import javax.swing.*;
 

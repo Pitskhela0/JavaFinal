@@ -9,8 +9,6 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.ItemEvent;
-import java.awt.event.ItemListener;
 
 public class ClientConnection extends JFrame{
     private boolean isHosting = false;
@@ -105,85 +103,6 @@ public class ClientConnection extends JFrame{
         super.dispose();
     }
 
-    private Result getResult() {
-        setTitle("Chess Game - Start Menu");
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(600, 400);
-        setLocationRelativeTo(null);
-
-        joiningIDField = new JTextField(20);
-        spectatingIDField = new JTextField(20);
-
-        MenuStyles.styleField(joiningIDField);
-        MenuStyles.styleField(spectatingIDField);
-
-        JButton hostGameButton = new JButton("Host Game");
-        JButton joinGameButton = new JButton("Join Game");
-        JButton spectateGameButton = new JButton("Spectate Game");
-        JButton watchGameFromDBButton = new JButton("Review Played Game");
-        JButton playWithBotButton = new JButton("Play with bot");
-
-        MenuStyles.styleButton(hostGameButton);
-        MenuStyles.styleButton(joinGameButton);
-        MenuStyles.styleButton(spectateGameButton);
-        MenuStyles.styleButton(watchGameFromDBButton);
-        MenuStyles.styleButton(playWithBotButton);
-
-        JPanel panel = new JPanel();
-        panel.setLayout(new GridBagLayout());
-
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(10, 10, 10, 10);
-
-        // Host Game button
-        gbc.gridx = 0;
-        gbc.gridy = 1;
-        gbc.gridwidth = 2;
-        gbc.anchor = GridBagConstraints.CENTER;
-        panel.add(hostGameButton, gbc);
-        // reset width
-        gbc.gridwidth = 1;
-
-        // Join Game Label
-        gbc.gridx = 0;
-        gbc.gridy = 2;
-        panel.add(joinGameButton, gbc);
-
-        // Join Game Field (right of label, same row)
-        gbc.gridx = 1;
-        panel.add(joiningIDField, gbc);
-
-        // spectate game button
-        gbc.gridx = 0;
-        gbc.gridy = 3;
-        panel.add(spectateGameButton,gbc);
-
-        // spectate game field for game id
-        gbc.gridx = 1;
-        panel.add(spectatingIDField,gbc);
-
-
-        String[] gameList = { "Game #101", "Game #102", "Game #103" };
-        JComboBox<String> gameDropdown = new JComboBox<>(gameList);
-
-        MenuStyles.styleDropDown(gameDropdown);
-
-
-        gbc.gridx = 0;
-        gbc.gridy = 4;
-        panel.add(watchGameFromDBButton,gbc);
-
-        gbc.gridx = 1;
-        panel.add(gameDropdown, gbc);
-
-        gbc.gridx = 0;
-        gbc.gridy = 5;
-        panel.add(playWithBotButton, gbc);
-
-        add(panel);
-        return new Result(hostGameButton, joinGameButton, spectateGameButton, watchGameFromDBButton, playWithBotButton);
-    }
-
     private record Result(JButton hostGameButton, JButton joinGameButton,
                           JButton spectateGameButton, JButton watchGameFromDBButton,
                           JButton playWithBotButton) {
@@ -232,5 +151,134 @@ public class ClientConnection extends JFrame{
         } catch (InterruptedException e) {
             // Ignore
         }
+    }
+
+    private Result getResult() {
+        setTitle("Chess Master - Game Lobby");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(700, 650); // Slightly taller for better spacing
+        setLocationRelativeTo(null);
+        setResizable(false);
+
+        // Create main panel with chess pattern background
+        JPanel mainPanel = MenuStyles.createChessPatternPanel();
+        mainPanel.setLayout(new BorderLayout());
+        mainPanel.setBackground(MenuStyles.BACKGROUND);
+
+        // Header panel
+        JPanel headerPanel = new JPanel();
+        headerPanel.setLayout(new BoxLayout(headerPanel, BoxLayout.Y_AXIS));
+        headerPanel.setOpaque(false);
+        headerPanel.setBorder(BorderFactory.createEmptyBorder(30, 20, 20, 20));
+
+        // Title
+        JLabel titleLabel = MenuStyles.createTitleLabel("Chess Master");
+        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        headerPanel.add(titleLabel);
+
+        // Subtitle
+        JLabel subtitleLabel = MenuStyles.createSubtitleLabel("Choose your game mode");
+        subtitleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        headerPanel.add(Box.createVerticalStrut(10));
+        headerPanel.add(subtitleLabel);
+
+        // Content panel - USING VERTICAL LAYOUT FOR CONSISTENT WIDTH
+        JPanel contentPanel = new JPanel();
+        contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
+        contentPanel.setOpaque(false);
+        contentPanel.setBorder(BorderFactory.createEmptyBorder(20, 50, 30, 50));
+
+        // Create styled components
+        joiningIDField = new JTextField("Enter Game ID");
+        spectatingIDField = new JTextField("Enter Game ID to Spectate");
+
+        MenuStyles.styleField(joiningIDField);
+        MenuStyles.styleField(spectatingIDField);
+
+        // Add placeholder behavior
+        addPlaceholderBehavior(joiningIDField, "Enter Game ID");
+        addPlaceholderBehavior(spectatingIDField, "Enter Game ID to Spectate");
+
+        JButton hostGameButton = createStyledButton("HOST NEW GAME", "Start a new game and invite friends");
+        JButton joinGameButton = createStyledButton("JOIN GAME", "Join an existing game");
+        JButton spectateGameButton = createStyledButton("SPECTATE GAME", "Watch a game in progress");
+        JButton watchGameFromDBButton = createStyledButton("REVIEW GAME", "Watch previously played games");
+        JButton playWithBotButton = createStyledButton("PLAY VS BOT", "Challenge the computer");
+
+        String[] gameList = {"Championship Final", "Epic Battle", "Quick Match"};
+        JComboBox<String> gameDropdown = new JComboBox<>(gameList);
+        MenuStyles.styleDropDown(gameDropdown);
+
+        // Add all components with consistent spacing and centering
+        contentPanel.add(createCenteredComponent(hostGameButton));
+        contentPanel.add(Box.createVerticalStrut(15));
+
+        contentPanel.add(createCenteredComponent(joinGameButton));
+        contentPanel.add(Box.createVerticalStrut(8));
+        contentPanel.add(Box.createVerticalStrut(15));
+
+        contentPanel.add(createCenteredComponent(spectateGameButton));
+        contentPanel.add(Box.createVerticalStrut(8));
+        contentPanel.add(Box.createVerticalStrut(15));
+
+        contentPanel.add(createCenteredComponent(watchGameFromDBButton));
+        contentPanel.add(Box.createVerticalStrut(8));
+        contentPanel.add(createCenteredComponent(gameDropdown));
+        contentPanel.add(Box.createVerticalStrut(15));
+
+        contentPanel.add(createCenteredComponent(playWithBotButton));
+
+        // Footer
+        JPanel footerPanel = new JPanel();
+        footerPanel.setOpaque(false);
+        JLabel footerLabel = new JLabel("May the best player win!");
+        footerLabel.setFont(new Font("Segoe UI", Font.ITALIC, 12));
+        footerLabel.setForeground(MenuStyles.LIGHT_SQUARE);
+        footerPanel.add(footerLabel);
+
+        // Assemble main panel
+        mainPanel.add(headerPanel, BorderLayout.NORTH);
+        mainPanel.add(contentPanel, BorderLayout.CENTER);
+        mainPanel.add(footerPanel, BorderLayout.SOUTH);
+
+        add(mainPanel);
+        return new Result(hostGameButton, joinGameButton, spectateGameButton, watchGameFromDBButton, playWithBotButton);
+    }
+
+    // Helper method to center components
+    private JPanel createCenteredComponent(JComponent component) {
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        panel.setOpaque(false);
+        panel.add(component);
+        return panel;
+    }
+
+    private void addPlaceholderBehavior(JTextField field, String placeholder) {
+        field.setForeground(Color.GRAY);
+
+        field.addFocusListener(new java.awt.event.FocusAdapter() {
+            @Override
+            public void focusGained(java.awt.event.FocusEvent e) {
+                if (field.getText().equals(placeholder)) {
+                    field.setText("");
+                    field.setForeground(MenuStyles.DARK_SQUARE);
+                }
+            }
+
+            @Override
+            public void focusLost(java.awt.event.FocusEvent e) {
+                if (field.getText().isEmpty()) {
+                    field.setText(placeholder);
+                    field.setForeground(Color.GRAY);
+                }
+            }
+        });
+    }
+
+    private JButton createStyledButton(String text, String tooltip) {
+        JButton button = new JButton(text);
+        MenuStyles.styleButton(button);
+        button.setToolTipText(tooltip);
+        return button;
     }
 }
