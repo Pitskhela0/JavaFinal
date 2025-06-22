@@ -1,6 +1,5 @@
-import clientSide.Client;
-import serverSide.Server;
 import startMenu.ClientConnection;
+import ui.AuthWindow;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -10,7 +9,9 @@ public class Main {
 //    private Map<String, > games = new ArrayList<>();
 
     public static void main(String[] args) throws IOException {
-        ClientConnection client = new ClientConnection();
-        client.start();
+        new AuthWindow();
+//
+//        ClientConnection client = new ClientConnection();
+//        client.start();
     }
 }
