@@ -25,6 +25,7 @@ public class JoinGamePlayerButton {
             Thread blackPlayer = new Thread(() ->{
                 try {
                     Thread.sleep(500);
+
                     Client client = new Client(10000, "player", clientConnection);
                     client.start();
                 } catch (Exception e) {

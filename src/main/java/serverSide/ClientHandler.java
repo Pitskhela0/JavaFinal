@@ -1,5 +1,6 @@
 package serverSide;
 
+import chess.model.BoardState;
 import shared.GameState;
 import shared.ChessMove;
 
@@ -19,6 +20,7 @@ public class ClientHandler {
     }
 
     private boolean isPlayer = false;
+    private boolean isBot = false;
     private boolean isWhitePlayer = false;
     private final PrintWriter printWriter;
     private final Scanner scanner;
@@ -127,7 +129,10 @@ public class ClientHandler {
                 System.out.println("Role request: " + userInput);
                 LOGGER.info("Server - Role request: " + userInput);
 
-                if (userInput.equals("player")) {
+                if (userInput.equals("player") || userInput.equals("bot")) {
+                    if(userInput.equals("bot")){
+                        isBot = true;
+                    }
                     if (server.getPlayers().size() >= 2) {
                         // informative message
                         printWriter.println("There are already 2 players");

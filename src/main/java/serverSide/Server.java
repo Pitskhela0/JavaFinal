@@ -2,8 +2,7 @@ package serverSide;
 
 import chess.model.BoardState;
 import chess.model.Square;
-import chess.model.pieces.Piece;
-import shared.GameState;
+import chess.model.pieces.Piece;import shared.GameState;
 import shared.ChessMove;
 
 import java.io.IOException;
@@ -106,8 +105,8 @@ public class Server {
         try {
             if (!gameFinished.get()) {
                 // there is no need to wait for available port for out app right now, since many users will not connect
-//                serverSocket = new ServerSocket(0); // finds free available port in OS
-                serverSocket = new ServerSocket(10000);
+                serverSocket = new ServerSocket(0); // finds free available port in OS
+//                serverSocket = new ServerSocket(10000);
                 SERVER_PORT = serverSocket.getLocalPort();
                 LOGGER.info("Server - Server socket created successfully on port " + SERVER_PORT);
             }

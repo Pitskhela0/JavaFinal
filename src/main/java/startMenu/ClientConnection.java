@@ -1,17 +1,19 @@
 package startMenu;
 
 import serverSide.Server;
-import startMenu.buttonFunctions.HostGameButton;
-import startMenu.buttonFunctions.JoinGamePlayerButton;
-import startMenu.buttonFunctions.SpectateGameButton;
+import startMenu.buttonFunctions.*;
+import startMenu.buttonFunctions.PlayWithBotButton;
 import startMenu.menuStyling.MenuStyles;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.ItemEvent;
+import java.awt.event.ItemListener;
 
 public class ClientConnection extends JFrame{
+    private boolean isHosting = false;
     private int clientID;
     private String clientName;
     private String email;
@@ -22,7 +24,9 @@ public class ClientConnection extends JFrame{
     private Thread currentServerThread;
     private Server currentServer;
 
-    private int GAME_ID;
+    public boolean isHosting() {
+        return isHosting;
+    }
 
     public ClientConnection(){
 
@@ -54,29 +58,44 @@ public class ClientConnection extends JFrame{
 
         result.watchGameFromDBButton().addActionListener(e -> watchGameFromDB());
 
+        result.playWithBotButton().addActionListener(e -> playWithBot());
+
+
         setVisible(true);
     }
 
     public void hostGame(){
+        isHosting = true;
         HostGameButton game = new HostGameButton(this);
-        GAME_ID = game.getGAME_ID();
         game.hostGame();
     }
 
     public void joinGame(JTextField gameIDText){
         // find server with entered gameID and connect to its port as client
+        isHosting = false;
         JoinGamePlayerButton blackPlayerHandler = new JoinGamePlayerButton(this,gameIDText);
         blackPlayerHandler.joinGame();
     }
 
     public void spectateGame(JTextField gameID){
         // find server with entered gameID and connect to its port as spectator
+        isHosting = false;
         SpectateGameButton spectator = new SpectateGameButton(this, gameID);
         spectator.spectate();
     }
 
     public void watchGameFromDB(){
         // retrieve game from db, run auto-game
+        isHosting = false;
+        WatchGameFromDBButton dbWatching = new WatchGameFromDBButton(this);
+        dbWatching.startWatching();
+    }
+
+    public void playWithBot(){
+        isHosting = true;
+        PlayWithBotButton botPlaying = new PlayWithBotButton(this);
+        botPlaying.hostGameWithBot();
+
     }
 
     // Override window closing to clean up server
@@ -102,11 +121,13 @@ public class ClientConnection extends JFrame{
         JButton joinGameButton = new JButton("Join Game");
         JButton spectateGameButton = new JButton("Spectate Game");
         JButton watchGameFromDBButton = new JButton("Review Played Game");
+        JButton playWithBotButton = new JButton("Play with bot");
 
         MenuStyles.styleButton(hostGameButton);
         MenuStyles.styleButton(joinGameButton);
         MenuStyles.styleButton(spectateGameButton);
         MenuStyles.styleButton(watchGameFromDBButton);
+        MenuStyles.styleButton(playWithBotButton);
 
         JPanel panel = new JPanel();
         panel.setLayout(new GridBagLayout());
@@ -141,10 +162,12 @@ public class ClientConnection extends JFrame{
         gbc.gridx = 1;
         panel.add(spectatingIDField,gbc);
 
+
         String[] gameList = { "Game #101", "Game #102", "Game #103" };
         JComboBox<String> gameDropdown = new JComboBox<>(gameList);
 
         MenuStyles.styleDropDown(gameDropdown);
+
 
         gbc.gridx = 0;
         gbc.gridy = 4;
@@ -153,12 +176,17 @@ public class ClientConnection extends JFrame{
         gbc.gridx = 1;
         panel.add(gameDropdown, gbc);
 
+        gbc.gridx = 0;
+        gbc.gridy = 5;
+        panel.add(playWithBotButton, gbc);
+
         add(panel);
-        return new Result(hostGameButton, joinGameButton, spectateGameButton, watchGameFromDBButton);
+        return new Result(hostGameButton, joinGameButton, spectateGameButton, watchGameFromDBButton, playWithBotButton);
     }
 
     private record Result(JButton hostGameButton, JButton joinGameButton,
-                          JButton spectateGameButton, JButton watchGameFromDBButton) {
+                          JButton spectateGameButton, JButton watchGameFromDBButton,
+                          JButton playWithBotButton) {
     }
     // Method to properly stop the current server
     public void stopCurrentServer() {

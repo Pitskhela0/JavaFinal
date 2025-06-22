@@ -5,28 +5,18 @@ import serverSide.Server;
 import startMenu.ClientConnection;
 
 import javax.swing.*;
-import java.util.Collections;
 
-public class HostGameButton {
+public class PlayWithBotButton {
     private Thread currentServerThread;
     private Server currentServer;
     private ClientConnection clientConnection;
     private int GAME_ID;
 
-    public int getGAME_ID() {
-        return GAME_ID;
-    }
-
-    public HostGameButton(ClientConnection clientConnection){
+    public PlayWithBotButton(ClientConnection clientConnection){
         this.clientConnection = clientConnection;
-        this.GAME_ID = gameIDGenerator();
     }
 
-    private int gameIDGenerator(){
-        return 0;
-    }
-
-    public void hostGame(){
+    public void hostGameWithBot(){
         // Stop any existing server first
         clientConnection.stopCurrentServer();
 
@@ -35,8 +25,7 @@ public class HostGameButton {
 
         // Start server in background thread
 
-        currentServer = new Server(GAME_ID);
-
+        currentServer = new Server(10000);
 
         currentServerThread = new Thread(() -> {
             try {
@@ -83,7 +72,26 @@ public class HostGameButton {
                 });
             }
         });
+
         whitePlayer.setName("Chess-Client-Thread");
         whitePlayer.start();
+
+        Thread botPlayer = new Thread(() -> {
+            try{
+                Thread.sleep(5000);
+                Client client = new Client(currentServer.getPort(), "bot", clientConnection);
+                client.start();
+            }
+            catch (Exception e){
+                System.err.println("Client error: " + e.getMessage());
+
+                SwingUtilities.invokeLater(() -> {
+                    clientConnection.showStartMenu();
+                });
+            }
+        });
+
+        botPlayer.setName("Chess-Client-Thread-Bot");
+        botPlayer.start();
     }
 }

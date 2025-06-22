@@ -1,13 +1,15 @@
 package chess.model;
 
 import chess.model.pieces.*;
+
+import java.io.Serializable;
 import java.util.LinkedList;
 import java.util.List;
 
-public class BoardState {
+public class BoardState implements Serializable {
     public static final int SIZE = 8;
 
-    private final Square[][] board = new Square[SIZE][SIZE];
+    private Square[][] board = new Square[SIZE][SIZE];
     private boolean whiteTurn = true;
     private final List<Piece> whitePieces = new LinkedList<>();
     private final List<Piece> blackPieces = new LinkedList<>();
@@ -17,6 +19,32 @@ public class BoardState {
         initializeSquares();
         initializePieces();
     }
+//    public BoardState(Square[][] board){
+//        this.board = board;
+//    }
+     public BoardState(Square[][] existingBoard) {
+         this.board = existingBoard;
+
+         // Rebuild piece lists from the board
+         for (int row = 0; row < SIZE; row++) {
+             for (int col = 0; col < SIZE; col++) {
+                 Piece piece = existingBoard[row][col].getOccupyingPiece();
+                 if (piece != null) {
+                     if (piece.getColor() == 1) {
+                         whitePieces.add(piece);
+                         if (piece instanceof King) {
+                             whiteKing = (King) piece;
+                         }
+                     } else {
+                         blackPieces.add(piece);
+                         if (piece instanceof King) {
+                             blackKing = (King) piece;
+                         }
+                     }
+                 }
+             }
+         }
+ }
 
     private void initializeSquares() {
         for (int y = 0; y < SIZE; y++) {

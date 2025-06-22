@@ -1,5 +1,6 @@
 package clientSide;
 
+import clientSide.clients.BotPlayerClient;
 import clientSide.clients.PlayerClient;
 import clientSide.clients.SpectatorClient;
 import clientSide.utils.ServerConnector;
@@ -28,16 +29,16 @@ public class Client {
     }
 
     public void start() throws IOException {
-//        try{
+        try{
             System.out.println("Connecting to chess server...");
             gameSocket = new Socket("localhost", SERVER_PORT);
             System.out.println("Connected to server successfully!");
-//        }
-//        catch (Exception e){
-//
-//            System.out.println("Cannot connect to server. Make sure the server is running on localhost:10000");
-//            return;
-//        }
+        }
+        catch (Exception e){
+
+            System.out.println("Cannot connect to server. Make sure the server is running on localhost:10000");
+            return;
+        }
 
         try {
             serverConnector = new ServerConnector(gameSocket);
@@ -74,6 +75,11 @@ public class Client {
             } else if(role.equals("spectator")){
                 SpectatorClient spectator = new SpectatorClient(serverConnector, serverScanner);
                 spectator.clientSpectator();
+            }
+            else if(role.equals("bot")){
+                System.out.println("you are assigned as Black Bot");
+                BotPlayerClient bot = new BotPlayerClient(false, serverConnector, serverScanner, printWriter, userInputScanner, clientConnection, gameSocket);
+                bot.runBot();
             }
             else {
                 System.out.println("Server connection failed or server is closed");

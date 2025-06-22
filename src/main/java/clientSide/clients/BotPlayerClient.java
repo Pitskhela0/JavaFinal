@@ -1,18 +1,28 @@
 package clientSide.clients;
 
+import chess.model.BoardState;
+import chess.model.Square;
+import chess.model.pieces.*;
 import clientSide.utils.ServerConnector;
 import shared.GameState;
 import shared.ChessMove;
 import chess.view.NetworkGameWindow;
 import startMenu.ClientConnection;
+import startMenu.buttonFunctions.PlayWithBotButton;
 
 import javax.swing.*;
+import java.io.ObjectInputStream;
 import java.io.PrintWriter;
+import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-public class PlayerClient {
+public class BotPlayerClient {
     private boolean isWhite;
     private ServerConnector serverConnector;
     private Scanner serverScanner;
@@ -22,55 +32,18 @@ public class PlayerClient {
     private CountDownLatch windowCreatedLatch = new CountDownLatch(1);
     private AtomicBoolean shutdownRequested = new AtomicBoolean(false);
     private ClientConnection clientConnection;
+    private GameState gameState;
+    private Socket clientSocket;
 
-    public PlayerClient(boolean isWhite, ServerConnector serverConnector, Scanner serverScanner,
-                        PrintWriter printWriter, Scanner userInputScanner, ClientConnection clientConnection){
+    public BotPlayerClient(boolean isWhite, ServerConnector serverConnector, Scanner serverScanner,
+                        PrintWriter printWriter, Scanner userInputScanner, ClientConnection clientConnection, Socket clientSocket){
         this.isWhite = isWhite;
         this.serverConnector = serverConnector;
         this.serverScanner = serverScanner;
         this.printWriter = printWriter;
         this.userInputScanner = userInputScanner;
         this.clientConnection = clientConnection;
-
-        initializeGameWindow();
-    }
-
-    private void initializeGameWindow() {
-        SwingUtilities.invokeLater(() -> {
-            try {
-                String colorString = isWhite ? "white" : "black";
-                gameWindow = new NetworkGameWindow("player", colorString);
-                gameWindow.setPlayerClient(this);
-
-                // Set proper close operation - DON'T exit immediately
-                gameWindow.getFrame().setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-
-                // Add window listener for cleanup
-                gameWindow.getFrame().addWindowListener(new java.awt.event.WindowAdapter() {
-                    @Override
-                    public void windowClosing(java.awt.event.WindowEvent windowEvent) {
-                        System.out.println("Game window closing, cleaning up...");
-                        requestShutdown();
-                    }
-                });
-
-                System.out.println("Game window created for " + colorString + " player");
-                windowCreatedLatch.countDown(); // Signal that window is ready
-
-            } catch (Exception e) {
-                System.err.println("Error creating game window: " + e.getMessage());
-                e.printStackTrace();
-                windowCreatedLatch.countDown(); // Signal completion even on error
-            }
-        });
-
-        // Wait for window creation to complete
-        try {
-            windowCreatedLatch.await(); // Wait up to 5 seconds
-            Thread.sleep(100); // Small delay to ensure window is fully rendered
-        } catch (InterruptedException e) {
-            System.err.println("Interrupted while waiting for window creation");
-        }
+        this.clientSocket = clientSocket;
     }
 
     public void requestShutdown() {
@@ -91,13 +64,6 @@ public class PlayerClient {
                 // 2. Close network resources
                 closeAllResources();
 
-                // 3. Close window on EDT
-                SwingUtilities.invokeLater(() -> {
-                    if (gameWindow != null) {
-                        gameWindow.getFrame().dispose();
-                    }
-                });
-
                 // 4. Force exit after brief delay
                 Thread.sleep(500);
                 System.out.println("Exiting application...");
@@ -116,7 +82,7 @@ public class PlayerClient {
         shutdownThread.start();
     }
 
-    public void runPlayer() {
+    public void runBot() {
         System.out.println("You are now a " + (isWhite ? "white" : "black") + " player. Waiting for game to start...");
 
         while (serverConnector.getIsConnected().get() && !shutdownRequested.get()) {
@@ -139,18 +105,18 @@ public class PlayerClient {
                 if (messageFromServer.equals("GAME_STATE_UPDATE")) {
                     // This is a game state update
                     String gameStateData = serverScanner.nextLine();
-                    GameState gameState = deserializeGameState(gameStateData);
+                    gameState = deserializeGameState(gameStateData);
 
-                    if (gameWindow != null && !shutdownRequested.get()) {
-                        SwingUtilities.invokeLater(() -> {
-                            gameWindow.updateGameState(gameState);
-                        });
-                    }
-                    System.out.println("Game state updated: " + gameState);
+                    System.out.println("Game state updated in bot player");
 
                 } else if (messageFromServer.equals("REQUEST_MOVE")) {
                     // Server is asking for our move
                     System.out.println("Your turn! Make your move on the board or type 'resign'");
+
+
+                    ChessMove botMove = findLegalMove();
+
+                    sendMoveToServer(botMove);
 
                 } else if (messageFromServer.equals("INVALID_MOVE")) {
                     // Server rejected our move
@@ -195,6 +161,91 @@ public class PlayerClient {
         }
     }
 
+    private ChessMove findLegalMove() {
+        String[][] stringBoard = gameState.getBoard();
+        Square[][] squareBoard = generateSquareBoard(stringBoard);
+
+        BoardState currentBoard = new BoardState(squareBoard);
+
+        List<Piece> blackPieces = currentBoard.getBlackPieces();
+
+        for(Piece piece : blackPieces){
+            List<Square> legalMoves = piece.getLegalMoves(currentBoard);
+
+            for (Square targetSquare : legalMoves){
+                if(currentBoard.isKingSafeAfterMove(piece, targetSquare)){
+                    return new ChessMove(
+                            piece.getPosition().getYNum(),
+                            piece.getPosition().getXNum(),
+                            targetSquare.getYNum(),
+                            targetSquare.getXNum());
+                }
+            }
+        }
+        return null;
+    }
+
+    private Square[][] generateSquareBoard(String[][] stringBoard) {
+        Square[][] board = new Square[8][8];
+
+        // First pass: Create all squares with proper colors
+        for (int row = 0; row < 8; row++) {
+            for (int col = 0; col < 8; col++) {
+                // Square color follows same pattern as original BoardState
+                int squareColor = ((col + row) % 2 == 0) ? 1 : 0;
+                board[row][col] = new Square(col, row, squareColor);
+            }
+        }
+
+        // Second pass: Create and place pieces
+        for (int row = 0; row < 8; row++) {
+            for (int col = 0; col < 8; col++) {
+                String pieceString = stringBoard[row][col];
+
+                if (pieceString != null && !pieceString.isEmpty()) {
+                    Piece piece = createPieceFromString(pieceString, board[row][col]);
+                    if (piece != null) {
+                        board[row][col].setOccupyingPiece(piece);
+                    }
+                }
+            }
+        }
+
+        return board;
+    }
+
+    private Piece createPieceFromString(String pieceString, Square square) {
+        if (pieceString == null || pieceString.length() < 2) {
+            return null;
+        }
+
+        // Extract color and piece type
+        int pieceColor = pieceString.charAt(0) == 'w' ? 1 : 0; // 1 = white, 0 = black
+        String pieceType = pieceString.substring(1); // Everything after color char
+
+        // Create image path
+        String imagePath = "/images/" + pieceString + ".png";
+
+        // Create appropriate piece based on type
+        switch (pieceType) {
+            case "pawn":
+                return new Pawn(pieceColor, square, imagePath);
+            case "rook":
+                return new Rook(pieceColor, square, imagePath);
+            case "knight":
+                return new Knight(pieceColor, square, imagePath);
+            case "bishop":
+                return new Bishop(pieceColor, square, imagePath);
+            case "queen":
+                return new Queen(pieceColor, square, imagePath);
+            case "king":
+                return new King(pieceColor, square, imagePath);
+            default:
+                System.err.println("Unknown piece type: " + pieceType);
+                return null;
+        }
+    }
+
     // Called by the board panel when player makes a move
     public void sendMoveToServer(ChessMove move) {
         if (shutdownRequested.get()) return;
@@ -209,6 +260,18 @@ public class PlayerClient {
         }
     }
 
+    // Called by the board panel to send resignation
+    public void sendResignation() {
+        if (shutdownRequested.get()) return;
+
+        try {
+            printWriter.println("resign");
+            printWriter.flush();
+            System.out.println("Resignation sent to server");
+        } catch (Exception e) {
+            System.out.println("Error sending resignation to server: " + e.getMessage());
+        }
+    }
 
     // Deserialize game state from server format
     private GameState deserializeGameState(String data) {
