@@ -43,6 +43,6 @@ public class AuthServiceTest {
     @Test
     void testLoginFailure() {
         AuthService.register("loginfail", "correctpass");
-        assertFalse(AuthService.login("loginuser", "mypassword") < 0, "Login with wrong password should fail");
+        assertTrue(AuthService.login("loginfail", "wrongpass") < 0, "Login with wrong password should fail");
     }
 }
