@@ -107,6 +107,14 @@ public class ClientConnection extends JFrame{
                           JButton spectateGameButton, JButton watchGameFromDBButton,
                           JButton playWithBotButton) {
     }
+
+    public void setClientId(int userId) {
+        clientID = userId;
+    }
+
+    public int getClientID() {
+        return this.clientID;
+    }
     // Method to properly stop the current server
     public void stopCurrentServer() {
         System.out.println("Stopping current server if running...");

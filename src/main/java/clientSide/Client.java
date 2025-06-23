@@ -55,6 +55,11 @@ public class Client {
             serverScanner = new Scanner(inputStream);
             userInputScanner = new Scanner(System.in); // single scanner for all user input
 
+            // ✅ Send userId and role to server
+            int userId = clientConnection.getClientID();
+            printWriter.println("USER_ID:" + userId);
+            printWriter.flush();
+
             // assigning the role
             role = assignRole();
 

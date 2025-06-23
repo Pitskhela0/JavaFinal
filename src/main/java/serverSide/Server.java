@@ -3,6 +3,10 @@ package serverSide;
 import chess.model.BoardState;
 import chess.model.Square;
 import chess.model.pieces.Piece;import shared.GameState;
+import chess.model.pieces.Piece;
+import database.GameDatabase;
+import parsing.PGNWriter;
+import shared.GameState;
 import shared.ChessMove;
 
 import java.io.IOException;
@@ -20,7 +24,7 @@ import java.util.logging.Level;
 public class Server {
     private static final Logger LOGGER = Logger.getLogger(Server.class.getName());
     private int SERVER_PORT;
-    private int GAME_ID;
+    private final int GAME_ID;
     private final int SHUTDOWN_DELAY_MS = 500;
     private final String COLOR_WHITE = "white";
     private final String COLOR_BLACK = "black";
@@ -28,6 +32,11 @@ public class Server {
 
     private List<ClientHandler> spectators = Collections.synchronizedList(new ArrayList<>());
     private final List<ClientHandler> players = Collections.synchronizedList(new ArrayList<>());
+
+    private int whiteId = -1;
+    private int blackId = -1;
+
+    private List<ChessMove> moveHistory = new ArrayList<>();
     private BoardState gameBoard; // Server maintains authoritative game state
 
     private final AtomicBoolean gameFinished = new AtomicBoolean(false);
@@ -179,16 +188,29 @@ public class Server {
 
     public void startGame() {
         LOGGER.info("Server - Starting game with 2 players");
+
+        if (players.size() >= 2) {
+            whiteId = players.get(0).getUserId();
+            blackId = players.get(1).getUserId();
+            System.out.println("✅ Game started with White ID: " + whiteId + ", Black ID: " + blackId);
+        }
+
         gameStarted.set(true);
 
         // Initialize the game board on server
-        gameBoard = new BoardState();
+        this.gameBoard = new BoardState();
+        System.out.println("✅ Initialized gameBoard in startGame");
 
         // Send initial game state to both players and spectators
         GameState initialState = new GameState(gameBoard);
         broadcastGameState(initialState);
 
         LOGGER.info("Server - Initial game state broadcasted");
+
+        LOGGER.info("Game board state right before loop: " + gameBoard);
+        LOGGER.info("Both players alive? " + bothPlayersAlive());
+        LOGGER.info("Is game board null? " + (gameBoard == null));
+        LOGGER.info("Players list size: " + players.size());
 
         // Game loop
         int turnCount = 0;
@@ -229,6 +251,8 @@ public class Server {
 
     private boolean handlePlayerTurn(int playerIndex, boolean isWhite) {
         try {
+            LOGGER.info("Handling move. gameBoard = " + gameBoard);
+
             String color = isWhite ? COLOR_WHITE : COLOR_BLACK;
             LOGGER.info("Server - Requesting move from " + color + " player");
 
@@ -265,6 +289,9 @@ public class Server {
 
                 // Broadcast to all clients
                 broadcastGameState(newState);
+
+                //store played move
+                moveHistory.add(move);
 
                 // Check for game end conditions
                 if (newState.isGameOver()) {
@@ -346,7 +373,11 @@ public class Server {
     }
 
     private boolean isGameFinished() {
-        return gameFinished.get() || gameBoard == null || !bothPlayersAlive();
+        boolean finished = gameFinished.get() || gameBoard == null || !bothPlayersAlive();
+        LOGGER.info("Checking if game finished: gameFinished=" + gameFinished.get()
+                + ", gameBoard null? " + (gameBoard == null)
+                + ", bothPlayersAlive=" + bothPlayersAlive());
+        return finished;
     }
 
     private void broadcastGameState(GameState gameState) {
@@ -407,6 +438,30 @@ public class Server {
 public void endGame() {
     if (gameFinished.getAndSet(true)) {
         return; // Already ending/ended
+    }
+
+    try {
+        if (gameBoard == null) {
+            System.err.println("❌ Cannot save game: gameBoard is null");
+            return; // Abort early
+        }
+
+        GameState finalState = new GameState(gameBoard);
+        String result;
+        switch (finalState.getWinner()) {
+            case "white" -> result = "1-0";
+            case "black" -> result = "0-1";
+            default -> result = "1/2-1/2";
+        }
+        String pgn = PGNWriter.generatePGN(moveHistory, String.valueOf(whiteId), String.valueOf(blackId), result);
+
+        GameDatabase db = new GameDatabase();
+        db.insertGameWithMoves(whiteId, blackId, moveHistory, pgn);
+
+        System.out.println("✅ Game and moves saved to database.");
+    } catch (Exception e) {
+        System.err.println("❌ Failed to save game data: " + e.getMessage());
+        e.printStackTrace();
     }
 
     LOGGER.info("Server - Ending game");

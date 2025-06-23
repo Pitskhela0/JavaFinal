@@ -1,9 +1,9 @@
-import startMenu.ClientConnection;
+import ui.AuthWindow;
 
 import java.io.IOException;
+
 public class Main {
-    public static void main(String[] args){
-        ClientConnection client = new ClientConnection();
-        client.start();
+    public static void main(String[] args) throws IOException {
+        new AuthWindow();
     }
 }
