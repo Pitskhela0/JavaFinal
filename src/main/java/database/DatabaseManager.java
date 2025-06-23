@@ -37,13 +37,7 @@ public class DatabaseManager {
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     game_id INTEGER NOT NULL,
                     move_number INTEGER NOT NULL,
-                    from_row INTEGER,
-                    from_col INTEGER,
-                    to_row INTEGER,
-                    to_col INTEGER,
-                    special_move TEXT,
-                    move_type TEXT,
-                    timestamp TIMESTAMP,
+                    move_text TEXT NOT NULL,
                     FOREIGN KEY (game_id) REFERENCES games(id)
                 );
             """);

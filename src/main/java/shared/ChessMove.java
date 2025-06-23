@@ -130,4 +130,17 @@ public class ChessMove implements Serializable {
         if (!isNormalMove()) return moveType;
         return fromRow + "," + fromCol + "," + toRow + "," + toCol;
     }
+
+    public String getFromSquare() {
+        char file = (char) ('a' + fromCol); // 'a' to 'h'
+        int rank = 8 - fromRow;             // '1' to '8'
+        return "" + file + rank;
+    }
+
+    public String getToSquare() {
+        char file = (char) ('a' + toCol);
+        int rank = 8 - toRow;
+        return "" + file + rank;
+    }
+
 }

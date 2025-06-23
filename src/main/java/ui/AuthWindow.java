@@ -65,10 +65,14 @@ public class AuthWindow extends JFrame {
             return;
         }
 
-        boolean success = AuthService.login(username, password);
-        if (success) {
+
+        int userId = AuthService.login(username, password);
+
+        if (userId > 0) {
             dispose();
-            new ClientConnection().start(); // opens multiplayer menu
+            ClientConnection clientConnection = new ClientConnection();
+            clientConnection.setClientId(userId);
+            clientConnection.start();
         } else {
             JOptionPane.showMessageDialog(this, "❌ Invalid username or password");
         }

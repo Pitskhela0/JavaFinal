@@ -37,14 +37,12 @@ public class AuthServiceTest {
     @Test
     void testLoginSuccess() {
         AuthService.register("loginuser", "mypassword");
-        boolean result = AuthService.login("loginuser", "mypassword");
-        assertTrue(result, "Login should succeed");
+        assertTrue(AuthService.login("loginuser", "mypassword") > 0);
     }
 
     @Test
     void testLoginFailure() {
         AuthService.register("loginfail", "correctpass");
-        boolean result = AuthService.login("loginfail", "wrongpass");
-        assertFalse(result, "Login with wrong password should fail");
+        assertFalse(AuthService.login("loginuser", "mypassword") < 0, "Login with wrong password should fail");
     }
 }

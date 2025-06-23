@@ -33,6 +33,8 @@ public class ClientHandler {
 
     private Server server;
 
+    private int userId;
+
     public ClientHandler(Socket socket, Socket heartbeatSocket, Server server) {
         InputStream inputStream1;
         this.heartbeatSocket = heartbeatSocket;
@@ -55,6 +57,20 @@ public class ClientHandler {
         Thread.startVirtualThread(this::handleHeartbeat);
 
         LOGGER.info("Server - ClientHandler initialized for new connection");
+
+        try {
+            String idStr = scanner.nextLine();
+            if (idStr.startsWith("USER_ID:")) {
+                userId = Integer.parseInt(idStr.substring("USER_ID:".length()));
+                System.out.println("✅ Received userId from client: " + userId);
+            } else {
+                System.err.println("❌ Invalid format. Expected USER_ID:<id>, got: " + idStr);
+                userId = -1;
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Failed to parse userId from client.");
+            userId = -1;
+        }
     }
 
     public void handleClient() {
@@ -129,15 +145,11 @@ public class ClientHandler {
 
                 if (userInput.equals("player")) {
                     if (server.getPlayers().size() >= 2) {
-                        // informative message
                         printWriter.println("There are already 2 players");
-                        // acknowledgement
                         printWriter.println("not ok");
                         printWriter.flush();
                     } else {
-                        // informative message
                         printWriter.println("You successfully connected to server as Player");
-                        // acknowledgement
                         printWriter.println("ok");
                         printWriter.flush();
                         assigned = true;
@@ -147,29 +159,21 @@ public class ClientHandler {
                     }
                 } else if (userInput.equals("spectator")) {
                     assigned = true;
-                    System.out.println("Spectator has connected");
-                    LOGGER.info("Server - Spectator has connected");
-                    // informative message
                     printWriter.println("You successfully connected to server as Spectator");
-                    // acknowledgement
                     printWriter.println("ok");
                     printWriter.flush();
 
-                    if(server.isGameStarted()){
-                        // mid game spectator - send current game state
+                    if (server.isGameStarted()) {
                         GameState currentState = new GameState(server.getBoard());
                         sendGameState(currentState);
                     }
                 } else {
-                    // informative message
                     printWriter.println("Invalid role. Please choose 'player' or 'spectator'");
-                    // acknowledgement
                     printWriter.println("not ok");
                     printWriter.flush();
                 }
             } catch (Exception e) {
                 LOGGER.log(Level.WARNING, "Server - Client disconnected during role assignment", e);
-                System.out.println("Client disconnected during role assignment");
                 break;
             }
         }
@@ -185,18 +189,15 @@ public class ClientHandler {
                         isWhitePlayer = true;
                         printWriter.println("white");
                         printWriter.flush();
-                        System.out.println("Assigned as White player");
                         LOGGER.info("Server - Assigned as White player");
                     } else {
                         isWhitePlayer = false;
                         printWriter.println("black");
                         printWriter.flush();
-                        System.out.println("Assigned as Black player");
                         LOGGER.info("Server - Assigned as Black player");
                     }
                 }
 
-                // Check if game should start
                 if (!server.isGameStarted() && server.getPlayers().size() == 2) {
                     server.setGameStarted(true);
                     new Thread(() -> server.startGame()).start();
@@ -204,7 +205,6 @@ public class ClientHandler {
             } else {
                 synchronized (server.getSpectators()) {
                     server.getSpectators().add(this);
-                    System.out.println("Total spectators: " + server.getSpectators().size());
                     LOGGER.info("Server - Total spectators: " + server.getSpectators().size());
                 }
             }
@@ -358,5 +358,9 @@ public class ClientHandler {
             LOGGER.log(Level.WARNING, "Server - Error closing client handler", e);
             System.out.println("Error closing client handler: " + e.getMessage());
         }
+    }
+
+    public int getUserId() {
+        return userId;
     }
 }

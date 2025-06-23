@@ -157,6 +157,14 @@ public class ClientConnection extends JFrame{
         return new Result(hostGameButton, joinGameButton, spectateGameButton, watchGameFromDBButton);
     }
 
+    public void setClientId(int userId) {
+        clientID = userId;
+    }
+
+    public int getClientID() {
+        return this.clientID;
+    }
+
     private record Result(JButton hostGameButton, JButton joinGameButton,
                           JButton spectateGameButton, JButton watchGameFromDBButton) {
     }

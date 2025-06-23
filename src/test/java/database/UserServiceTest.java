@@ -41,18 +41,18 @@ public class UserServiceTest {
     @Test
     void testLoginSuccess() {
         UserService.register(conn, "carol", "secret", "carol@mail.com");
-        assertTrue(UserService.login(conn, "carol", "secret"));
+        assertTrue(UserService.login(conn, "carol", "secret") > 0);
     }
 
     @Test
     void testLoginFailsWrongPassword() {
         UserService.register(conn, "dave", "secret", "dave@mail.com");
-        assertFalse(UserService.login(conn, "dave", "wrongpass"));
+        assertFalse(UserService.login(conn, "dave", "wrongpass") > 0);
     }
 
     @Test
     void testLoginFailsNoUser() {
-        assertFalse(UserService.login(conn, "ghost", "nopass"));
+        assertFalse(UserService.login(conn, "ghost", "nopass") > 0);
     }
 
     @Test

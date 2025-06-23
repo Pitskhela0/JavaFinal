@@ -9,13 +9,15 @@ import java.sql.DriverManager;
 public class AuthService {
     private static final String DB_URL = "jdbc:sqlite:chess.db"; // persistent file
 
-    public static boolean login(String username, String password) {
+    public static int login(String username, String password) {
         try (Connection conn = DriverManager.getConnection(DB_URL)) {
             DatabaseManager.initializeSchema(conn);
-            return UserService.login(conn, username, password);
+            int userId = UserService.login(conn,username, password);
+
+            return userId;
         } catch (Exception e) {
             e.printStackTrace();
-            return false;
+            return -1;
         }
     }
 
