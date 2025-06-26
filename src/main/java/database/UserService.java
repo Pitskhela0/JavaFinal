@@ -20,24 +20,24 @@ public class UserService {
         }
     }
 
-    public static int login(Connection conn, String username, String password) {
-        String sql = "SELECT id, password_hash FROM users WHERE username = ?";
-        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+    public static UserLoginResult login(Connection conn, String username, String password) {
+        String query = "SELECT id, username, password_hash FROM users WHERE username = ?";
+        try (PreparedStatement stmt = conn.prepareStatement(query)) {
             stmt.setString(1, username);
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    String storedHash = rs.getString("password_hash");
-                    if (BCrypt.checkpw(password, storedHash)) {
-                        return rs.getInt("id"); // ✅ Return user ID
-                    }
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                String hashedPassword = rs.getString("password_hash");
+                if (BCrypt.checkpw(password, hashedPassword)) {
+                    int userId = rs.getInt("id");
+                    String fetchedUsername = rs.getString("username");
+                    return new UserLoginResult(userId, fetchedUsername);
                 }
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        return -1;
+        return null;
     }
-
 
     public static int getUserId(Connection conn, String username) {
         try (PreparedStatement stmt = conn.prepareStatement(

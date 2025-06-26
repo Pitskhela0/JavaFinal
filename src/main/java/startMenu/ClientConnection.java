@@ -13,7 +13,7 @@ import java.awt.event.ActionListener;
 public class ClientConnection extends JFrame{
     private boolean isHosting = false;
     private int clientID;
-    private String clientName;
+    private String clientUsername;
     private String email;
     private JTextField joiningIDField;
     private JTextField spectatingIDField;
@@ -93,7 +93,6 @@ public class ClientConnection extends JFrame{
         isHosting = true;
         PlayWithBotButton botPlaying = new PlayWithBotButton(this);
         botPlaying.hostGameWithBot();
-
     }
 
     // Override window closing to clean up server
@@ -115,6 +114,15 @@ public class ClientConnection extends JFrame{
     public int getClientID() {
         return this.clientID;
     }
+
+    public void setClientUsername(String name) {
+        this.clientUsername = name;
+    }
+    public String getClientUsername() {
+        return this.clientUsername != null ? this.clientUsername : "User";
+    }
+
+
     // Method to properly stop the current server
     public void stopCurrentServer() {
         System.out.println("Stopping current server if running...");
@@ -177,24 +185,32 @@ public class ClientConnection extends JFrame{
         JPanel headerPanel = new JPanel();
         headerPanel.setLayout(new BoxLayout(headerPanel, BoxLayout.Y_AXIS));
         headerPanel.setOpaque(false);
-        headerPanel.setBorder(BorderFactory.createEmptyBorder(30, 20, 20, 20));
+        headerPanel.setBorder(BorderFactory.createEmptyBorder(10, 20, 0, 20)); // Top padding reduced
 
         // Title
         JLabel titleLabel = MenuStyles.createTitleLabel("Chess Master");
         titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         headerPanel.add(titleLabel);
 
+        // Welcome message
+        JLabel welcomeLabel = new JLabel("Welcome back, " + getClientUsername() + "!");
+        welcomeLabel.setFont(new Font("Georgia", Font.BOLD, 18));
+        welcomeLabel.setForeground(MenuStyles.LIGHT_SQUARE);
+        welcomeLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        headerPanel.add(Box.createVerticalStrut(5));
+        headerPanel.add(welcomeLabel);
+
         // Subtitle
         JLabel subtitleLabel = MenuStyles.createSubtitleLabel("Choose your game mode");
         subtitleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        headerPanel.add(Box.createVerticalStrut(10));
+        headerPanel.add(Box.createVerticalStrut(8));
         headerPanel.add(subtitleLabel);
 
-        // Content panel - USING VERTICAL LAYOUT FOR CONSISTENT WIDTH
+        // Content panel
         JPanel contentPanel = new JPanel();
         contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
         contentPanel.setOpaque(false);
-        contentPanel.setBorder(BorderFactory.createEmptyBorder(20, 50, 30, 50));
+        contentPanel.setBorder(BorderFactory.createEmptyBorder(10, 50, 30, 50)); // Slightly moved up
 
         // Create styled components
         joiningIDField = new JTextField("Enter Game ID");
@@ -202,8 +218,6 @@ public class ClientConnection extends JFrame{
 
         MenuStyles.styleField(joiningIDField);
         MenuStyles.styleField(spectatingIDField);
-
-        // Add placeholder behavior
         addPlaceholderBehavior(joiningIDField, "Enter Game ID");
         addPlaceholderBehavior(spectatingIDField, "Enter Game ID to Spectate");
 
@@ -217,23 +231,16 @@ public class ClientConnection extends JFrame{
         JComboBox<String> gameDropdown = new JComboBox<>(gameList);
         MenuStyles.styleDropDown(gameDropdown);
 
-        // Add all components with consistent spacing and centering
         contentPanel.add(createCenteredComponent(hostGameButton));
         contentPanel.add(Box.createVerticalStrut(15));
-
         contentPanel.add(createCenteredComponent(joinGameButton));
-        contentPanel.add(Box.createVerticalStrut(8));
         contentPanel.add(Box.createVerticalStrut(15));
-
         contentPanel.add(createCenteredComponent(spectateGameButton));
-        contentPanel.add(Box.createVerticalStrut(8));
         contentPanel.add(Box.createVerticalStrut(15));
-
         contentPanel.add(createCenteredComponent(watchGameFromDBButton));
         contentPanel.add(Box.createVerticalStrut(8));
         contentPanel.add(createCenteredComponent(gameDropdown));
         contentPanel.add(Box.createVerticalStrut(15));
-
         contentPanel.add(createCenteredComponent(playWithBotButton));
 
         // Footer
@@ -244,7 +251,6 @@ public class ClientConnection extends JFrame{
         footerLabel.setForeground(MenuStyles.LIGHT_SQUARE);
         footerPanel.add(footerLabel);
 
-        // Assemble main panel
         mainPanel.add(headerPanel, BorderLayout.NORTH);
         mainPanel.add(contentPanel, BorderLayout.CENTER);
         mainPanel.add(footerPanel, BorderLayout.SOUTH);

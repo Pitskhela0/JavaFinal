@@ -3,6 +3,7 @@ package chess.view;
 import chess.model.BoardState;
 import chess.model.Square;
 import chess.model.pieces.*;
+import shared.ChessMove;
 
 import javax.swing.*;
 import java.awt.*;
@@ -197,6 +198,47 @@ public class BoardPanel extends JPanel implements MouseListener, MouseMotionList
             }
         });
         shake.start();
+    }
+
+    public void applyMove(ChessMove move) {
+        int fromRow = move.getFromRow();
+        int fromCol = move.getFromCol();
+        int toRow = move.getToRow();
+        int toCol = move.getToCol();
+
+        Square fromSquare = model.getSquareArray()[fromRow][fromCol];
+        Square toSquare = model.getSquareArray()[toRow][toCol];
+
+        Piece piece = fromSquare.getOccupyingPiece();
+        if (piece != null) {
+            model.commitMove(fromSquare, toSquare, piece);
+            revalidate();
+            repaint();
+        }
+    }
+
+    public void resetBoard() {
+        removeAll(); // Clear all squares from the panel
+        BoardState fresh = new BoardState(); // Create fresh board model
+        Square[][] newSquares = fresh.getSquareArray();
+
+        // Update internal model
+        for (int row = 0; row < BoardState.SIZE; row++) {
+            for (int col = 0; col < BoardState.SIZE; col++) {
+                this.model.getSquareArray()[row][col] = newSquares[row][col];
+            }
+        }
+
+        // Re-add new SquarePanels
+        setLayout(new GridLayout(BoardState.SIZE, BoardState.SIZE));
+        for (int r = 0; r < BoardState.SIZE; r++) {
+            for (int c = 0; c < BoardState.SIZE; c++) {
+                add(new SquarePanel(newSquares[r][c]));
+            }
+        }
+
+        revalidate();
+        repaint();
     }
 
     public boolean isWhiteTurn() {

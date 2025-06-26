@@ -3,6 +3,8 @@ package shared;
 import chess.model.BoardState;
 import chess.model.Square;
 import chess.model.pieces.*;
+
+import java.awt.*;
 import java.io.Serializable;
 
 public class GameState implements Serializable {
@@ -131,5 +133,98 @@ public class GameState implements Serializable {
         sb.append(", lastMove='").append(lastMove).append('\'');
         sb.append('}');
         return sb.toString();
+    }
+
+    public void makeMove(ChessMove move) {
+        String uci = move.toChessNotation();
+        if (uci == null || uci.length() < 4) return;
+
+        char fromFile = uci.charAt(0);
+        int fromRank = Character.getNumericValue(uci.charAt(1));
+        char toFile = uci.charAt(2);
+        int toRank = Character.getNumericValue(uci.charAt(3));
+
+        int fromRow = 8 - fromRank;
+        int fromCol = fromFile - 'a';
+        int toRow = 8 - toRank;
+        int toCol = toFile - 'a';
+
+        String piece = board[fromRow][fromCol];
+        if (piece != null) {
+            board[toRow][toCol] = piece;
+            board[fromRow][fromCol] = null;
+            this.lastMove = uci;
+            incrementMoveCount();
+            this.whiteTurn = !this.whiteTurn;
+        }
+    }
+
+    public void printBoard() {
+        System.out.println("  a b c d e f g h");
+        for (int row = 0; row < 8; row++) {
+            System.out.print((8 - row) + " ");
+            for (int col = 0; col < 8; col++) {
+                String piece = board[row][col];
+                System.out.print((piece != null ? piece.charAt(1) : '.') + " ");
+            }
+            System.out.println((8 - row));
+        }
+        System.out.println("  a b c d e f g h\n");
+    }
+
+    public String getBoardAsString() {
+        StringBuilder sb = new StringBuilder();
+        for (int row = 7; row >= 0; row--) {
+            sb.append(row + 1).append("  ");
+            for (int col = 0; col < 8; col++) {
+                String piece = board[row][col];
+                if (piece != null) {
+                    sb.append(getPieceSymbol(piece)).append(" ");
+                } else {
+                    sb.append(". ");
+                }
+            }
+            sb.append("\n");
+        }
+        sb.append("\n   a b c d e f g h\n");
+        return sb.toString();
+    }
+
+    private char getPieceSymbol(String notation) {
+        if (notation == null) return '.';
+
+        String type = notation.substring(1);
+        char symbol;
+
+        switch (type) {
+            case "pawn": symbol = 'p'; break;
+            case "rook": symbol = 'r'; break;
+            case "knight": symbol = 'n'; break;
+            case "bishop": symbol = 'b'; break;
+            case "queen": symbol = 'q'; break;
+            case "king": symbol = 'k'; break;
+            default: symbol = '?';
+        }
+
+        return notation.startsWith("w") ? Character.toUpperCase(symbol) : symbol;
+    }
+
+    public void reset() {
+        this.board = new String[8][8];
+        this.whiteTurn = true;
+        this.whiteInCheck = false;
+        this.blackInCheck = false;
+        this.gameOver = false;
+        this.winner = null;
+        this.moveCount = 0;
+        this.lastMove = "";
+
+        String[] backRank = {"rook", "knight", "bishop", "queen", "king", "bishop", "knight", "rook"};
+        for (int i = 0; i < 8; i++) {
+            board[0][i] = "b" + backRank[i]; // Black back rank
+            board[1][i] = "bpawn";           // Black pawns
+            board[6][i] = "wpawn";           // White pawns
+            board[7][i] = "w" + backRank[i]; // White back rank
+        }
     }
 }

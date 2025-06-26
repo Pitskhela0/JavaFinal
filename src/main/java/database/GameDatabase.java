@@ -3,6 +3,7 @@ package database;
 import shared.ChessMove;
 
 import java.sql.*;
+import java.util.ArrayList;
 import java.util.List;
 
 public class GameDatabase {
@@ -63,5 +64,27 @@ public class GameDatabase {
             e.printStackTrace();
         }
         return null;
+    }
+
+    public static List<String> getPGNsByUser(int userId) {
+        List<String> pgns = new ArrayList<>();
+        String query = "SELECT pgn_text FROM games WHERE white_id = ? OR black_id = ?";
+
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:chess.db");
+             PreparedStatement stmt = conn.prepareStatement(query)) {
+            stmt.setInt(1, userId);
+            stmt.setInt(2, userId);
+            ResultSet rs = stmt.executeQuery();
+
+            while (rs.next()) {
+                String pgn = rs.getString("pgn_text");
+                if (pgn != null && !pgn.isBlank()) {
+                    pgns.add(pgn);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return pgns;
     }
 }

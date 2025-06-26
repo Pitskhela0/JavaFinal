@@ -33,4 +33,12 @@ public class Record {
     public Map<String,String> getTags(){
         return tags;
     }
+
+    public String getWhite() {
+        return tags.getOrDefault("White", "White");
+    }
+
+    public String getBlack() {
+        return tags.getOrDefault("Black", "Black");
+    }
 }

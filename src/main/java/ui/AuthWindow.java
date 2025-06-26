@@ -1,5 +1,6 @@
 package ui;
 
+import database.UserLoginResult;
 import startMenu.ClientConnection;
 
 import javax.swing.*;
@@ -65,13 +66,13 @@ public class AuthWindow extends JFrame {
             return;
         }
 
+        UserLoginResult result = AuthService.login(username, password);
 
-        int userId = AuthService.login(username, password);
-
-        if (userId > 0) {
+        if (result != null) {
             dispose();
             ClientConnection clientConnection = new ClientConnection();
-            clientConnection.setClientId(userId);
+            clientConnection.setClientId(result.getUserId());
+            clientConnection.setClientUsername(result.getUsername());
             clientConnection.start();
         } else {
             JOptionPane.showMessageDialog(this, "❌ Invalid username or password");

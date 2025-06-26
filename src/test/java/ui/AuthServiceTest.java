@@ -1,8 +1,10 @@
 package ui;
 
 import database.DatabaseManager;
+import database.UserLoginResult;
 import database.UserService;
 import org.junit.jupiter.api.*;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
@@ -37,12 +39,16 @@ public class AuthServiceTest {
     @Test
     void testLoginSuccess() {
         AuthService.register("loginuser", "mypassword");
-        assertTrue(AuthService.login("loginuser", "mypassword") > 0);
+        UserLoginResult result = AuthService.login("loginuser", "mypassword");
+        assertNotNull(result, "Login should succeed and return a UserLoginResult");
+        assertEquals("loginuser", result.getUsername(), "Username should match");
+        assertTrue(result.getUserId() > 0, "User ID should be positive");
     }
 
     @Test
     void testLoginFailure() {
         AuthService.register("loginfail", "correctpass");
-        assertTrue(AuthService.login("loginfail", "wrongpass") < 0, "Login with wrong password should fail");
+        UserLoginResult result = AuthService.login("loginfail", "wrongpass");
+        assertNull(result, "Login with wrong password should return null");
     }
 }

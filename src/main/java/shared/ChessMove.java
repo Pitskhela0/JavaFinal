@@ -142,5 +142,4 @@ public class ChessMove implements Serializable {
         int rank = 8 - toRow;
         return "" + file + rank;
     }
-
 }
