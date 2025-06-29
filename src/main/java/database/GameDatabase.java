@@ -87,4 +87,26 @@ public class GameDatabase {
         }
         return pgns;
     }
+
+    public static void insertGamePGN(int userId, String pgnText) {
+        String insertSQL = """
+        INSERT INTO games (white_id, black_id, result, status, pgn_text, end_time)
+        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    """;
+
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:chess.db");
+             PreparedStatement stmt = conn.prepareStatement(insertSQL)) {
+
+            // Insert as if the user is white, opponent unknown (id = -1)
+            stmt.setInt(1, userId);        // white_id = user
+            stmt.setInt(2, -1);            // black_id = unknown
+            stmt.setString(3, "1/2-1/2");  // generic result
+            stmt.setString(4, "imported"); // status to differentiate
+            stmt.setString(5, pgnText);
+            stmt.executeUpdate();
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
 }
